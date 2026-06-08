@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Mezclas de Pintura Tradicional</title>
+    <title>Simulador de Mezclas - Taller de Pintura</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -16,53 +16,50 @@
         }
         .container {
             background: #ffffff;
-            padding: 30px;
+            padding: 25px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             max-width: 550px;
             width: 100%;
+            box-sizing: border-box;
         }
         h1 {
-            font-size: 24px;
+            font-size: 22px;
             text-align: center;
             margin-bottom: 20px;
         }
-        .selector-zone {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 25px;
+        
+        /* Contenedor con Zoom y Arrastre */
+        .image-container-wrapper {
+            margin-bottom: 10px;
         }
-        #colorDisplay {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            transition: background-color 0.1s ease;
-            border: 3px solid #ffffff;
-            outline: 1px solid #d2d2d7;
-        }
-
         .image-zone {
             border: 2px dashed #d2d2d7;
             border-radius: 8px;
-            padding: 15px;
+            padding: 0;
             text-align: center;
-            margin-bottom: 25px;
             background: #fbfbfd;
             cursor: pointer;
-        }
-        .image-zone:hover {
-            border-color: #0066cc;
+            position: relative;
+            overflow: hidden;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         #previewImage {
             max-width: 100%;
-            max-height: 220px;
-            border-radius: 6px;
-            display: none;
-            margin: 10px auto 0 auto;
+            max-height: 100%;
+            transform-origin: center center;
             cursor: crosshair;
+            position: absolute;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+        .upload-prompt-wrap {
+            padding: 20px;
+            pointer-events: none;
+            z-index: 2;
         }
         .upload-btn {
             display: inline-block;
@@ -74,176 +71,230 @@
             font-weight: 500;
             margin-top: 8px;
             cursor: pointer;
+            pointer-events: auto;
         }
-        #fileInput {
-            display: none;
+        #fileInput { display: none; }
+
+        /* Controles de Zoom */
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f5f5f7;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .zoom-controls input[type="range"] {
+            flex-grow: 1;
+        }
+
+        .selector-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #colorDisplay {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            border: 3px solid #ffffff;
+            outline: 1px solid #d2d2d7;
         }
         
-        .section-title {
-            font-size: 16px;
+        /* Estilo del Switch de Modo (Porcentaje vs Partes) */
+        .mode-switch-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            background: #f5f5f7;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .switch-label {
+            font-size: 14px;
             font-weight: 600;
-            margin-top: 20px;
+            color: #86868b;
+        }
+        .switch-label.active {
+            color: #1d1d1f;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider-switch {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #0066cc;
+            transition: .3s;
+            border-radius: 34px;
+        }
+        .slider-switch:before {
+            position: absolute;
+            content: "";
+            height: 18px; width: 18px;
+            left: 4px; bottom: 4px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .slider-switch { background-color: #34c759; }
+        input:checked + .slider-switch:before { transform: translateX(24px); }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 600;
             margin-bottom: 15px;
             border-bottom: 1px solid #e5e5e7;
             padding-bottom: 5px;
-            color: #1d1d1f;
         }
 
         .slider-container {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
-            gap: 12px;
+            margin-bottom: 12px;
+            gap: 10px;
         }
-        
-        /* Estilos nuevos para las etiquetas con fondo de color */
         .label {
-            width: 95px;
-            font-size: 14px;
+            width: 90px;
+            font-size: 13px;
             font-weight: 600;
-            padding: 5px 8px;
+            padding: 5px;
             border-radius: 6px;
             text-align: center;
-            box-sizing: border-box;
         }
-        
-        .slider-wrapper {
-            flex-grow: 1;
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
+        .slider-wrapper { flex-grow: 1; }
         input[type="range"] {
             width: 100%;
             -webkit-appearance: none;
             background: #e5e5e7;
-            height: 12px;
-            border-radius: 6px;
+            height: 10px;
+            border-radius: 5px;
             outline: none;
         }
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 24px;
-            height: 24px;
+            width: 22px; height: 22px;
             border-radius: 50%;
             background: #ffffff;
             border: 2px solid #86868b;
             cursor: pointer;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-            transition: transform 0.1s;
-        }
-        input[type="range"]::-webkit-slider-thumb:active {
-            transform: scale(1.2);
-            border-color: #0066cc;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
-        /* Estilos nuevos para los inputs numéricos de la derecha */
+        /* Input derecho adaptado */
+        .right-display {
+            width: 70px;
+            text-align: right;
+        }
         .percentage-input {
-            width: 55px;
-            padding: 5px;
+            width: 50px;
+            padding: 4px;
             font-size: 14px;
             font-weight: 600;
             text-align: right;
             border: 1px solid #d2d2d7;
             border-radius: 6px;
             background-color: #f5f5f7;
-            color: #1d1d1f;
             outline: none;
-            -moz-appearance: textfield;
-        }
-        .percentage-input::-webkit-outer-spin-button,
-        .percentage-input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
         }
         .percentage-input:focus {
             border-color: #0066cc;
             background-color: #ffffff;
-            box-shadow: 0 0 0 2px rgba(0,102,204,0.2);
         }
-        .input-group {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-        }
-        .input-group span {
+        .parts-text {
             font-size: 14px;
             font-weight: 600;
-            color: #424245;
-        }
-
-        .info-note {
-            font-size: 12px;
-            color: #86868b;
-            text-align: center;
-            margin-top: 5px;
+            color: #1d1d1f;
+            display: inline-block;
+            width: 100%;
+            text-align: right;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Laboratorio de Mezclas (RYB)</h1>
+    <h1>Laboratorio de Mezclas</h1>
     
-    <div class="image-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <span id="uploadPrompt" style="font-size: 14px; color: #86868b;">Arrastra una foto aquí o</span>
-        <div class="upload-btn">Examinar imagen</div>
-        <input type="file" id="fileInput" accept="image/*">
-        <img id="previewImage" alt="Previsualización">
+    <div class="image-container-wrapper">
+        <div class="image-zone" id="dropZone">
+            <div class="upload-prompt-wrap" id="uploadPrompt">
+                <span style="font-size: 14px; color: #86868b;">Arrastra una foto aquí o</span><br>
+                <div class="upload-btn" onclick="document.getElementById('fileInput').click()">Examinar imagen</div>
+            </div>
+            <input type="file" id="fileInput" accept="image/*">
+            <img id="previewImage" alt="Previsualización">
+        </div>
+    </div>
+
+    <div class="zoom-controls">
+        <span>Zoom:</span>
+        <input type="range" id="zoomSlider" min="1" max="4" step="0.1" value="1" disabled>
+        <span id="zoomVal">1.0x</span>
     </div>
 
     <div class="selector-zone">
         <div id="colorDisplay"></div>
         <div id="hexDisplay" style="font-family: monospace; font-size: 14px; color: #86868b;">#E67E22</div>
-        <div class="info-note">Modifica las barras, escribe los números directamente o captura desde la foto.</div>
     </div>
 
-    <div class="section-title">Proporciones de la Paleta Física</div>
+    <div class="mode-switch-container">
+        <span class="switch-label active" id="lbl-pct">Porcentajes (%)</span>
+        <label class="switch">
+            <input type="checkbox" id="modeToggle">
+            <span class="slider-switch"></span>
+        </label>
+        <span class="switch-label" id="lbl-parts">Partes (Fracciones)</span>
+    </div>
+
+    <div class="section-title" id="panelTitle">Proporciones de la Paleta</div>
     
     <div id="paint-sliders">
         <div class="slider-container">
             <div class="label" style="background-color: #ff3b30; color: #ffffff;">Rojo</div>
-            <div class="slider-wrapper">
-                <input type="range" id="slider-r" min="0" max="100" value="43">
-            </div>
-            <div class="input-group">
-                <input type="number" id="num-r" class="percentage-input" min="0" max="100" value="43">%
+            <div class="slider-wrapper"><input type="range" id="slider-r" min="0" max="100" value="43"></div>
+            <div class="right-display" id="box-r">
+                <input type="number" id="num-r" class="percentage-input" min="0" max="100" value="43">
             </div>
         </div>
         <div class="slider-container">
             <div class="label" style="background-color: #ffcc00; color: #1d1d1f;">Amarillo</div>
-            <div class="slider-wrapper">
-                <input type="range" id="slider-y" min="0" max="100" value="40">
-            </div>
-            <div class="input-group">
-                <input type="number" id="num-y" class="percentage-input" min="0" max="100" value="40">%
+            <div class="slider-wrapper"><input type="range" id="slider-y" min="0" max="100" value="40"></div>
+            <div class="right-display" id="box-y">
+                <input type="number" id="num-y" class="percentage-input" min="0" max="100" value="40">
             </div>
         </div>
         <div class="slider-container">
             <div class="label" style="background-color: #0055b8; color: #ffffff;">Azul</div>
-            <div class="slider-wrapper">
-                <input type="range" id="slider-b" min="0" max="100" value="0">
-            </div>
-            <div class="input-group">
-                <input type="number" id="num-b" class="percentage-input" min="0" max="100" value="0">%
+            <div class="slider-wrapper"><input type="range" id="slider-b" min="0" max="100" value="0"></div>
+            <div class="right-display" id="box-b">
+                <input type="number" id="num-b" class="percentage-input" min="0" max="100" value="0">
             </div>
         </div>
         <div class="slider-container">
             <div class="label" style="background-color: #000000; color: #ffffff;">Negro</div>
-            <div class="slider-wrapper">
-                <input type="range" id="slider-k" min="0" max="100" value="3">
-            </div>
-            <div class="input-group">
-                <input type="number" id="num-k" class="percentage-input" min="0" max="100" value="3">%
+            <div class="slider-wrapper"><input type="range" id="slider-k" min="0" max="100" value="3"></div>
+            <div class="right-display" id="box-k">
+                <input type="number" id="num-k" class="percentage-input" min="0" max="100" value="3">
             </div>
         </div>
         <div class="slider-container">
             <div class="label" style="background-color: #ffffff; color: #1d1d1f; border: 1px solid #d2d2d7;">Blanco</div>
-            <div class="slider-wrapper">
-                <input type="range" id="slider-w" min="0" max="100" value="14">
-            </div>
-            <div class="input-group">
-                <input type="number" id="num-w" class="percentage-input" min="0" max="100" value="14">%
+            <div class="slider-wrapper"><input type="range" id="slider-w" min="0" max="100" value="14"></div>
+            <div class="right-display" id="box-w">
+                <input type="number" id="num-w" class="percentage-input" min="0" max="100" value="14">
             </div>
         </div>
     </div>
@@ -252,165 +303,240 @@
 <canvas id="canvasAux" style="display:none;"></canvas>
 
 <script>
+    // Estado global de proporciones físicas internas (siempre suman 100 de forma exacta)
+    let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
+    let esModoPartes = false;
+
+    // Elementos UI
     const colorDisplay = document.getElementById('colorDisplay');
     const hexDisplay = document.getElementById('hexDisplay');
-    
-    const fileInput = document.getElementById('fileInput');
+    const modeToggle = document.getElementById('modeToggle');
+    const zoomSlider = document.getElementById('zoomSlider');
+    const zoomVal = document.getElementById('zoomVal');
     const previewImage = document.getElementById('previewImage');
-    const uploadPrompt = document.getElementById('uploadPrompt');
     const dropZone = document.getElementById('dropZone');
-    const canvasAux = document.getElementById('canvasAux');
-    const ctxAux = canvasAux.getContext('2d');
+    
+    const sliders = { r: document.getElementById('slider-r'), y: document.getElementById('slider-y'), b: document.getElementById('slider-b'), k: document.getElementById('slider-k'), w: document.getElementById('slider-w') };
+    const inputs = { r: document.getElementById('num-r'), y: document.getElementById('num-y'), b: document.getElementById('num-b'), k: document.getElementById('num-k'), w: document.getElementById('num-w') };
+    const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
 
-    const sliders = {
-        r: document.getElementById('slider-r'),
-        y: document.getElementById('slider-y'),
-        b: document.getElementById('slider-b'),
-        k: document.getElementById('slider-k'),
-        w: document.getElementById('slider-w')
-    };
+    // Lógica de Zoom y Paneado (Mover imagen)
+    let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0;
 
-    const inputs = {
-        r: document.getElementById('num-r'),
-        y: document.getElementById('num-y'),
-        b: document.getElementById('num-b'),
-        k: document.getElementById('num-k'),
-        w: document.getElementById('num-w')
-    };
+    zoomSlider.addEventListener('input', (e) => {
+        scale = parseFloat(e.target.value);
+        zoomVal.textContent = scale.toFixed(1) + "x";
+        limitarYAplicarTransformacion();
+    });
 
-    const RYB_CUBE = [
-        [1,1,1], [1,1,0], [1,0,0], [1,0.5,0],
-        [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]
-    ];
+    dropZone.addEventListener('mousedown', (e) => {
+        if (scale > 1) { isDragging = true; startX = e.clientX - posX; startY = e.clientY - posY; e.preventDefault(); }
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        posX = e.clientX - startX; posY = e.clientY - startY;
+        limitarYAplicarTransformacion();
+    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
 
+    // Soporte táctil paneo para iPhone
+    dropZone.addEventListener('touchstart', (e) => {
+        if (scale > 1 && e.touches.length === 1) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; }
+    }, {passive: true});
+    window.addEventListener('touchmove', (e) => {
+        if (!isDragging || e.touches.length !== 1) return;
+        posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY;
+        limitarYAplicarTransformacion();
+    });
+    window.addEventListener('touchend', () => { isDragging = false; });
+
+    function limitarYAplicarTransformacion() {
+        if (scale === 1) { posX = 0; posY = 0; }
+        previewImage.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+    }
+
+    // Conversión de porcentaje decimal a la fracción más cercana de taller
+    function porcentajeAFraccionTexto(pct) {
+        if (pct < 1.5) return "0";
+        const totalPartes = pct / 50; // Mapear base 50% = 1 Parte entera
+        const entero = Math.floor(totalPartes);
+        const residuo = totalPartes - entero;
+
+        let fraccionStr = "";
+        if (residuo >= 0.875) fraccionStr = "1";
+        else if (residuo >= 0.625) fraccionStr = "3/4";
+        else if (residuo >= 0.416) fraccionStr = "1/2";
+        else if (residuo >= 0.291) fraccionStr = "1/3";
+        else if (residuo >= 0.187) fraccionStr = "1/4";
+        else if (residuo >= 0.062) fraccionStr = "1/8";
+
+        if (fraccionStr === "1") {
+            return (entero + 1) + "";
+        }
+        if (entero > 0) {
+            return fraccionStr !== "" ? `${entero} ${fraccionStr}` : `${entero}`;
+        }
+        return fraccionStr !== "" ? fraccionStr : "0";
+    }
+
+    // Motor de reajuste automático para conservar siempre el 100% de la mezcla
+    function balancearProporciones(llaveModificada, nuevoValor) {
+        nuevoValor = Math.min(100, Math.max(0, nuevoValor));
+        const antiguoValor = currentProportions[llaveModificada];
+        const diferencia = nuevoValor - antiguoValor;
+        currentProportions[llaveModificada] = nuevoValor;
+
+        if (diferencia === 0) return;
+
+        const otrasLlaves = Object.keys(currentProportions).filter(k => k !== llaveModificada);
+        const sumaOtras = otrasLlaves.reduce((acc, k) => acc + currentProportions[k], 0);
+
+        if (sumaOtras > 0) {
+            let sumaVerificacion = 0;
+            otrasLlaves.forEach(k => {
+                const fraccion = currentProportions[k] / sumaOtras;
+                currentProportions[k] -= diferencia * fraccion;
+                currentProportions[k] = Math.max(0, currentProportions[k]);
+                sumaVerificacion += currentProportions[k];
+            });
+        } else {
+            // Si las otras estaban en cero, repartimos el residuo equitativamente
+            otrasLlaves.forEach(k => { currentProportions[k] = (100 - nuevoValor) / 4; });
+        }
+
+        // Corrección de redondeo para garantizar 100.0 absoluto
+        let sumaTotal = Object.values(currentProportions).reduce((a, b) => a + b, 0);
+        let desajuste = 100 - sumaTotal;
+        if (desajuste !== 0) {
+            currentProportions[otrasLlaves[0]] += desajuste;
+        }
+
+        renderizarHerramienta();
+    }
+
+    // Dibujado y Sincronización de Interfaz
+    const RYB_CUBE = [[1,1,1], [1,1,0], [1,0,0], [1,0.5,0], [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]];
+    
     function interpolarRyb(r, y, b) {
-        const rN = r / 100; const yN = y / 100; const bN = b / 100;
         let rgb = [0, 0, 0];
         for (let i = 0; i < 3; i++) {
-            const c000 = RYB_CUBE[0][i], c100 = RYB_CUBE[2][i], c010 = RYB_CUBE[1][i], c110 = RYB_CUBE[3][i],
-                  c001 = RYB_CUBE[4][i], c101 = RYB_CUBE[6][i], c011 = RYB_CUBE[5][i], c111 = RYB_CUBE[7][i];
-            const c00 = c000 * (1 - rN) + c100 * rN;
-            const c10 = c010 * (1 - rN) + c110 * rN;
-            const c01 = c001 * (1 - rN) + c101 * rN;
-            const c11 = c011 * (1 - rN) + c111 * rN;
-            const c0 = c00 * (1 - yN) + c10 * yN; const c1 = c01 * (1 - yN) + c11 * yN;
-            rgb[i] = c0 * (1 - bN) + c1 * bN;
+            const c00 = RYB_CUBE[0][i]*(1-r)+RYB_CUBE[2][i]*r, c10 = RYB_CUBE[1][i]*(1-r)+RYB_CUBE[3][i]*r;
+            const c01 = RYB_CUBE[4][i]*(1-r)+RYB_CUBE[6][i]*r, c11 = RYB_CUBE[5][i]*(1-r)+RYB_CUBE[7][i]*r;
+            rgb[i] = (c00*(1-y)+c10*y)*(1-b) + (c01*(1-y)+c11*y)*b;
         }
         return rgb;
     }
 
-    function rgbToRyb(r, g, b) {
-        const w = Math.min(r, g, b);
-        let rMat = r - w; let gMat = g - w; let bMat = b - w;
-        let y = Math.min(rMat, gMat); rMat -= y; gMat -= y;
-        if (bMat > 0 && gMat > 0) { bMat /= 2; gMat /= 2; }
-        y += gMat; let bOut = bMat + gMat;
-        const k = 255 - Math.max(r, g, b);
-        return { r: rMat, y: y, b: bOut, k: k, w: w };
-    }
+    function renderizarHerramienta() {
+        Object.keys(currentProportions).forEach(key => {
+            const pct = currentProportions[key];
+            sliders[key].value = Math.round(pct);
+            
+            if (esModoPartes) {
+                boxes[key].innerHTML = `<span class="parts-text">${porcentajeAFraccionTexto(pct)}</span>`;
+                sliders[key].disabled = true;
+            } else {
+                boxes[key].innerHTML = `<input type="number" id="num-${key}" class="percentage-input" min="0" max="100" value="${Math.round(pct)}">`;
+                sliders[key].disabled = false;
+                
+                // Reconectar oyente y forzar posición de cursor al final
+                const nuevoInput = document.getElementById(`num-${key}`);
+                nuevoInput.addEventListener('input', (e) => balancearProporciones(key, parseInt(e.target.value) || 0));
+                nuevoInput.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setTimeout(() => { nuevoInput.setSelectionRange(nuevoInput.value.length, nuevoInput.value.length); }, 10);
+                });
+            }
+        });
 
-    function rgbToHex(r, g, b) {
-        const toHex = c => { const h = c.toString(16); return h.length == 1 ? "0" + h : h; };
-        return "#" + toHex(r) + toHex(g) + toHex(b);
-    }
+        // Calcular Color Digital Resultante
+        const rMat = currentProportions.r/100, yMat = currentProportions.y/100, bMat = currentProportions.b/100;
+        let rgbBase = interpolarRyb(rMat, yMat, bMat);
+        
+        const factorK = 1 - (currentProportions.k/100);
+        let r = rgbBase[0]*factorK, g = rgbBase[1]*factorK, b = rgbBase[2]*factorK;
+        
+        const factorW = currentProportions.w/100;
+        r = r*(1-factorW)+factorW; g = g*(1-factorW)+factorW; b = b*(1-factorW)+factorW;
 
-    // Actualiza la visualización del color mezclado basándose en los valores actuales de los sliders
-    function redibujarColor() {
-        let r = parseFloat(sliders.r.value);
-        let y = parseFloat(sliders.y.value);
-        let b = parseFloat(sliders.b.value);
-        let k = parseFloat(sliders.k.value);
-        let w = parseFloat(sliders.w.value);
-
-        let rgbBase = interpolarRyb(r, y, b);
-        const factorK = 1 - (k / 100);
-        let red = rgbBase[0] * factorK; let green = rgbBase[1] * factorK; let blue = rgbBase[2] * factorK;
-
-        const factorW = w / 100;
-        red = red * (1 - factorW) + factorW; green = green * (1 - factorW) + factorW; blue = blue * (1 - factorW) + factorW;
-
-        const finalR = Math.min(255, Math.max(0, Math.round(red * 255)));
-        const finalG = Math.min(255, Math.max(0, Math.round(green * 255)));
-        const finalB = Math.min(255, Math.max(0, Math.round(blue * 255)));
-
-        const hex = rgbToHex(finalR, finalG, finalB);
+        const hex = "#" + [r,g,b].map(c => Math.min(255, Math.max(0, Math.round(c*255))).toString(16).padStart(2, '0')).join('');
         colorDisplay.style.backgroundColor = hex;
         hexDisplay.textContent = hex.toUpperCase();
     }
 
-    // Evento A: Mover los controles deslizantes
-    function manejarSliderInput(key) {
-        inputs[key].value = sliders[key].value;
-        redibujarColor();
-    }
-
-    // Evento B: Escribir directamente en las cajas numéricas
-    function manejarNumeroInput(key) {
-        let val = parseInt(inputs[key].value);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 100) val = 100;
-        
-        inputs[key].value = val;
-        sliders[key].value = val;
-        redibujarColor();
-    }
-
-    // Enlazar los eventos bidireccionales
+    // Eventos de Sliders de Pintura
     Object.keys(sliders).forEach(key => {
-        sliders[key].addEventListener('input', () => manejarSliderInput(key));
-        inputs[key].addEventListener('input', () => manejarNumeroInput(key));
-        // Evita que al dar clic en la caja de texto se active la carga de archivos
-        inputs[key].addEventListener('click', (e) => e.stopPropagation()); 
+        sliders[key].addEventListener('input', (e) => balancearProporciones(key, parseInt(e.target.value)));
     });
 
-    // Gestión e interacción con Imágenes
+    // Control del Switch (Porcentaje vs Partes)
+    modeToggle.addEventListener('change', (e) => {
+        esModoPartes = e.target.checked;
+        document.getElementById('lbl-pct').classList.toggle('active', !esModoPartes);
+        document.getElementById('lbl-parts').classList.toggle('active', esModoPartes);
+        document.getElementById('panelTitle').textContent = esModoPartes ? "Proporciones en Partes (Base 50% = 1 Parte)" : "Proporciones de la Paleta";
+        renderizarHerramienta();
+    });
+
+    // Procesamiento e interacción con imágenes
+    const fileInput = document.getElementById('fileInput');
+    const canvasAux = document.getElementById('canvasAux');
+    const ctxAux = canvasAux.getContext('2d');
+
     fileInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
-        if (file) cargarImagen(file);
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                previewImage.src = event.target.result;
+                previewImage.style.display = 'block';
+                document.getElementById('uploadPrompt').style.display = 'none';
+                zoomSlider.disabled = false;
+                scale = 1; posX = 0; posY = 0; zoomSlider.value = 1; zoomVal.textContent = "1.0x";
+                limitarYAplicarTransformacion();
+            }
+            reader.readAsDataURL(file);
+        }
     });
 
-    function cargarImagen(file) {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            previewImage.src = event.target.result;
-            previewImage.style.display = 'block';
-            uploadPrompt.textContent = "Cambiar de foto:";
-        }
-        reader.readAsDataURL(file);
+    function rgbToRyb(r, g, b) {
+        const w = Math.min(r, g, b);
+        let rMat = r - w, gMat = g - w, bMat = b - w;
+        let y = Math.min(rMat, gMat); rMat -= y; gMat -= y;
+        if (bMat > 0 && gMat > 0) { bMat /= 2; gMat /= 2; }
+        y += gMat;
+        return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
     }
 
+    // Captura de píxel preciso considerando Zoom y paneo
     previewImage.addEventListener('click', function(e) {
+        if (isDragging) return;
         e.stopPropagation();
+
         canvasAux.width = previewImage.naturalWidth;
         canvasAux.height = previewImage.naturalHeight;
         ctxAux.drawImage(previewImage, 0, 0);
 
         const rect = previewImage.getBoundingClientRect();
+        
+        // Calcular la coordenada exacta dentro de la foto real, removiendo la deformación del zoom
         const x = ((e.clientX - rect.left) / rect.width) * canvasAux.width;
         const y = ((e.clientY - rect.top) / rect.height) * canvasAux.height;
 
         const pixelData = ctxAux.getImageData(x, y, 1, 1).data;
-        const hex = rgbToHex(pixelData[0], pixelData[1], pixelData[2]);
-        
-        // Al capturar de la foto, calculamos y seteamos tanto el slider como el cuadro de texto
-        const r = pixelData[0]; const g = pixelData[1]; const b = pixelData[2];
-        const ryb = rgbToRyb(r, g, b);
+        const ryb = rgbToRyb(pixelData[0], pixelData[1], pixelData[2]);
         const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
 
         if (total > 0) {
-            Object.keys(sliders).forEach(key => {
-                let pct = Math.round((ryb[key] / total) * 100);
-                sliders[key].value = pct;
-                inputs[key].value = pct;
+            Object.keys(currentProportions).forEach(key => {
+                currentProportions[key] = (ryb[key] / total) * 100;
             });
+            renderizarHerramienta();
         }
-        
-        colorDisplay.style.backgroundColor = hex;
-        hexDisplay.textContent = hex.toUpperCase();
     });
 
-    // Inicialización del estado de color por defecto
-    redibujarColor();
+    // Arrancar la herramienta con el balance inicial
+    renderizarHerramienta();
 </script>
 
 </body>
