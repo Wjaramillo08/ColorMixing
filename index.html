@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Mezclas - Taller de Pintura</title>
+    <title>Simulador de Mezclas con Historial - Taller de Pintura</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -29,7 +29,6 @@
             margin-bottom: 20px;
         }
         
-        /* Contenedor con Zoom y Arrastre */
         .image-container-wrapper {
             margin-bottom: 10px;
         }
@@ -75,7 +74,6 @@
         }
         #fileInput { display: none; }
 
-        /* Controles de Zoom */
         .zoom-controls {
             display: flex;
             align-items: center;
@@ -94,7 +92,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             margin-bottom: 20px;
         }
         #colorDisplay {
@@ -105,8 +103,34 @@
             border: 3px solid #ffffff;
             outline: 1px solid #d2d2d7;
         }
+
+        /* Estilo para el Botón de Deshacer (Undo) */
+        .undo-btn {
+            background-color: #f5f5f7;
+            color: #0066cc;
+            border: 1px solid #d2d2d7;
+            padding: 6px 14px;
+            border-radius: 15px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+        .undo-btn:disabled {
+            color: #86868b;
+            background-color: #f5f5f7;
+            border-color: #e5e5e7;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .undo-btn:not(:disabled):hover {
+            background-color: #e8e8ed;
+            border-color: #86868b;
+        }
         
-        /* Estilo del Switch de Modo (Porcentaje vs Partes) */
         .mode-switch-container {
             display: flex;
             justify-content: center;
@@ -193,7 +217,6 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
-        /* Input derecho adaptado */
         .right-display {
             width: 70px;
             text-align: right;
@@ -248,6 +271,10 @@
     <div class="selector-zone">
         <div id="colorDisplay"></div>
         <div id="hexDisplay" style="font-family: monospace; font-size: 14px; color: #86868b;">#E67E22</div>
+        
+        <button id="undoBtn" class="undo-btn" disabled>
+            ⤺ Deshacer (0)
+        </button>
     </div>
 
     <div class="mode-switch-container">
@@ -303,11 +330,11 @@
 <canvas id="canvasAux" style="display:none;"></canvas>
 
 <script>
-    // Estado global de proporciones físicas internas (siempre suman 100 de forma exacta)
+    // Estado y Pila de Undo (Historial)
     let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
+    let undoStack = []; 
     let esModoPartes = false;
 
-    // Elementos UI
     const colorDisplay = document.getElementById('colorDisplay');
     const hexDisplay = document.getElementById('hexDisplay');
     const modeToggle = document.getElementById('modeToggle');
@@ -315,12 +342,47 @@
     const zoomVal = document.getElementById('zoomVal');
     const previewImage = document.getElementById('previewImage');
     const dropZone = document.getElementById('dropZone');
+    const undoBtn = document.getElementById('undoBtn');
     
     const sliders = { r: document.getElementById('slider-r'), y: document.getElementById('slider-y'), b: document.getElementById('slider-b'), k: document.getElementById('slider-k'), w: document.getElementById('slider-w') };
-    const inputs = { r: document.getElementById('num-r'), y: document.getElementById('num-y'), b: document.getElementById('num-b'), k: document.getElementById('num-k'), w: document.getElementById('num-w') };
     const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
 
-    // Lógica de Zoom y Paneado (Mover imagen)
+    // Lógica para guardar estados en el historial
+    function guardarEstadoEnHistorial() {
+        // Clonar el objeto de proporciones actuales para evitar referencias rotas
+        const copiaEstado = { ...currentProportions };
+        
+        // Evitar guardar duplicados seguidos si no hubo cambios reales
+        if (undoStack.length > 0) {
+            const ultimo = undoStack[undoStack.length - 1];
+            if (ultimo.r === copiaEstado.r && ultimo.y === copiaEstado.y && ultimo.b === copiaEstado.b && ultimo.k === copiaEstado.k && ultimo.w === copiaEstado.w) {
+                return;
+            }
+        }
+        
+        undoStack.push(copiaEstado);
+        // Limitar el historial a los últimos 40 estados para proteger memoria en móviles
+        if (undoStack.length > 40) undoStack.shift();
+        
+        actualizarBotonUndo();
+    }
+
+    // Acción del botón Deshacer
+    undoBtn.addEventListener('click', () => {
+        if (undoStack.length === 0) return;
+        
+        // Extraer el último estado guardado
+        currentProportions = undoStack.pop();
+        actualizarBotonUndo();
+        renderizarHerramienta();
+    });
+
+    function actualizarBotonUndo() {
+        undoBtn.disabled = undoStack.length === 0;
+        undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
+    }
+
+    // Lógica de Zoom y Paneado
     let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0;
 
     zoomSlider.addEventListener('input', (e) => {
@@ -339,7 +401,6 @@
     });
     window.addEventListener('mouseup', () => { isDragging = false; });
 
-    // Soporte táctil paneo para iPhone
     dropZone.addEventListener('touchstart', (e) => {
         if (scale > 1 && e.touches.length === 1) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; }
     }, {passive: true});
@@ -355,10 +416,9 @@
         previewImage.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
     }
 
-    // Conversión de porcentaje decimal a la fracción más cercana de taller
     function porcentajeAFraccionTexto(pct) {
         if (pct < 1.5) return "0";
-        const totalPartes = pct / 50; // Mapear base 50% = 1 Parte entera
+        const totalPartes = pct / 50; 
         const entero = Math.floor(totalPartes);
         const residuo = totalPartes - entero;
 
@@ -370,17 +430,17 @@
         else if (residuo >= 0.187) fraccionStr = "1/4";
         else if (residuo >= 0.062) fraccionStr = "1/8";
 
-        if (fraccionStr === "1") {
-            return (entero + 1) + "";
-        }
-        if (entero > 0) {
-            return fraccionStr !== "" ? `${entero} ${fraccionStr}` : `${entero}`;
-        }
+        if (fraccionStr === "1") return (entero + 1) + "";
+        if (entero > 0) return fraccionStr !== "" ? `${entero} ${fraccionStr}` : `${entero}`;
         return fraccionStr !== "" ? fraccionStr : "0";
     }
 
-    // Motor de reajuste automático para conservar siempre el 100% de la mezcla
-    function balancearProporciones(llaveModificada, nuevoValor) {
+    function balancearProporciones(llaveModificada, nuevoValor, esFinDelGesto = false) {
+        // Antes de alterar el estado, si es el inicio de un cambio confirmado, guardamos el estado viejo
+        if (esFinDelGesto) {
+            guardarEstadoEnHistorial();
+        }
+
         nuevoValor = Math.min(100, Math.max(0, nuevoValor));
         const antiguoValor = currentProportions[llaveModificada];
         const diferencia = nuevoValor - antiguoValor;
@@ -400,21 +460,16 @@
                 sumaVerificacion += currentProportions[k];
             });
         } else {
-            // Si las otras estaban en cero, repartimos el residuo equitativamente
             otrasLlaves.forEach(k => { currentProportions[k] = (100 - nuevoValor) / 4; });
         }
 
-        // Corrección de redondeo para garantizar 100.0 absoluto
         let sumaTotal = Object.values(currentProportions).reduce((a, b) => a + b, 0);
         let desajuste = 100 - sumaTotal;
-        if (desajuste !== 0) {
-            currentProportions[otrasLlaves[0]] += desajuste;
-        }
+        if (desajuste !== 0) { currentProportions[otrasLlaves[0]] += desajuste; }
 
         renderizarHerramienta();
     }
 
-    // Dibujado y Sincronización de Interfaz
     const RYB_CUBE = [[1,1,1], [1,1,0], [1,0,0], [1,0.5,0], [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]];
     
     function interpolarRyb(r, y, b) {
@@ -439,9 +494,16 @@
                 boxes[key].innerHTML = `<input type="number" id="num-${key}" class="percentage-input" min="0" max="100" value="${Math.round(pct)}">`;
                 sliders[key].disabled = false;
                 
-                // Reconectar oyente y forzar posición de cursor al final
                 const nuevoInput = document.getElementById(`num-${key}`);
-                nuevoInput.addEventListener('input', (e) => balancearProporciones(key, parseInt(e.target.value) || 0));
+                
+                // Eventos de teclado numérico
+                nuevoInput.addEventListener('focus', () => {
+                    // Guardar el estado justo antes de que el usuario empiece a escribir
+                    guardarEstadoEnHistorial();
+                });
+                nuevoInput.addEventListener('input', (e) => {
+                    balancearProporciones(key, parseInt(e.target.value) || 0, false);
+                });
                 nuevoInput.addEventListener('click', (e) => {
                     e.stopPropagation();
                     setTimeout(() => { nuevoInput.setSelectionRange(nuevoInput.value.length, nuevoInput.value.length); }, 10);
@@ -449,13 +511,10 @@
             }
         });
 
-        // Calcular Color Digital Resultante
         const rMat = currentProportions.r/100, yMat = currentProportions.y/100, bMat = currentProportions.b/100;
         let rgbBase = interpolarRyb(rMat, yMat, bMat);
-        
         const factorK = 1 - (currentProportions.k/100);
         let r = rgbBase[0]*factorK, g = rgbBase[1]*factorK, b = rgbBase[2]*factorK;
-        
         const factorW = currentProportions.w/100;
         r = r*(1-factorW)+factorW; g = g*(1-factorW)+factorW; b = b*(1-factorW)+factorW;
 
@@ -464,12 +523,16 @@
         hexDisplay.textContent = hex.toUpperCase();
     }
 
-    // Eventos de Sliders de Pintura
+    // Eventos de Sliders de Pintura con soporte para registrar historial al soltar el control
     Object.keys(sliders).forEach(key => {
-        sliders[key].addEventListener('input', (e) => balancearProporciones(key, parseInt(e.target.value)));
+        sliders[key].addEventListener('mousedown', () => { guardarEstadoEnHistorial(); });
+        sliders[key].addEventListener('touchstart', () => { guardarEstadoEnHistorial(); }, {passive: true});
+        
+        sliders[key].addEventListener('input', (e) => {
+            balancearProporciones(key, parseInt(e.target.value), false);
+        });
     });
 
-    // Control del Switch (Porcentaje vs Partes)
     modeToggle.addEventListener('change', (e) => {
         esModoPartes = e.target.checked;
         document.getElementById('lbl-pct').classList.toggle('active', !esModoPartes);
@@ -478,7 +541,6 @@
         renderizarHerramienta();
     });
 
-    // Procesamiento e interacción con imágenes
     const fileInput = document.getElementById('fileInput');
     const canvasAux = document.getElementById('canvasAux');
     const ctxAux = canvasAux.getContext('2d');
@@ -508,18 +570,18 @@
         return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
     }
 
-    // Captura de píxel preciso considerando Zoom y paneo
     previewImage.addEventListener('click', function(e) {
         if (isDragging) return;
         e.stopPropagation();
+
+        // Antes de capturar el nuevo color de la foto, guardamos el que estaba en el historial
+        guardarEstadoEnHistorial();
 
         canvasAux.width = previewImage.naturalWidth;
         canvasAux.height = previewImage.naturalHeight;
         ctxAux.drawImage(previewImage, 0, 0);
 
         const rect = previewImage.getBoundingClientRect();
-        
-        // Calcular la coordenada exacta dentro de la foto real, removiendo la deformación del zoom
         const x = ((e.clientX - rect.left) / rect.width) * canvasAux.width;
         const y = ((e.clientY - rect.top) / rect.height) * canvasAux.height;
 
@@ -535,7 +597,6 @@
         }
     });
 
-    // Arrancar la herramienta con el balance inicial
     renderizarHerramienta();
 </script>
 
