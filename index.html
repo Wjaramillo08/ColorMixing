@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Mezclas con Historial - Taller de Pintura</title>
+    <title>Simulador de Mezclas - Taller de Pintura</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -104,7 +104,6 @@
             outline: 1px solid #d2d2d7;
         }
 
-        /* Estilo para el Botón de Deshacer (Undo) */
         .undo-btn {
             background-color: #f5f5f7;
             color: #0066cc;
@@ -271,10 +270,7 @@
     <div class="selector-zone">
         <div id="colorDisplay"></div>
         <div id="hexDisplay" style="font-family: monospace; font-size: 14px; color: #86868b;">#E67E22</div>
-        
-        <button id="undoBtn" class="undo-btn" disabled>
-            ⤺ Deshacer (0)
-        </button>
+        <button id="undoBtn" class="undo-btn" disabled>⤺ Deshacer (0)</button>
     </div>
 
     <div class="mode-switch-container">
@@ -330,7 +326,6 @@
 <canvas id="canvasAux" style="display:none;"></canvas>
 
 <script>
-    // Estado y Pila de Undo (Historial)
     let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
     let undoStack = []; 
     let esModoPartes = false;
@@ -347,31 +342,21 @@
     const sliders = { r: document.getElementById('slider-r'), y: document.getElementById('slider-y'), b: document.getElementById('slider-b'), k: document.getElementById('slider-k'), w: document.getElementById('slider-w') };
     const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
 
-    // Lógica para guardar estados en el historial
     function guardarEstadoEnHistorial() {
-        // Clonar el objeto de proporciones actuales para evitar referencias rotas
         const copiaEstado = { ...currentProportions };
-        
-        // Evitar guardar duplicados seguidos si no hubo cambios reales
         if (undoStack.length > 0) {
             const ultimo = undoStack[undoStack.length - 1];
             if (ultimo.r === copiaEstado.r && ultimo.y === copiaEstado.y && ultimo.b === copiaEstado.b && ultimo.k === copiaEstado.k && ultimo.w === copiaEstado.w) {
                 return;
             }
         }
-        
         undoStack.push(copiaEstado);
-        // Limitar el historial a los últimos 40 estados para proteger memoria en móviles
         if (undoStack.length > 40) undoStack.shift();
-        
         actualizarBotonUndo();
     }
 
-    // Acción del botón Deshacer
     undoBtn.addEventListener('click', () => {
         if (undoStack.length === 0) return;
-        
-        // Extraer el último estado guardado
         currentProportions = undoStack.pop();
         actualizarBotonUndo();
         renderizarHerramienta();
@@ -382,8 +367,8 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
-    // Lógica de Zoom y Paneado
-    let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0;
+    // Coordenadas globales de paneo y control de arrastre
+    let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0, haHechoPaneo = false;
 
     zoomSlider.addEventListener('input', (e) => {
         scale = parseFloat(e.target.value);
@@ -391,25 +376,51 @@
         limitarYAplicarTransformacion();
     });
 
+    // Eventos Mouse
     dropZone.addEventListener('mousedown', (e) => {
-        if (scale > 1) { isDragging = true; startX = e.clientX - posX; startY = e.clientY - posY; e.preventDefault(); }
+        isDragging = true;
+        haHechoPaneo = false;
+        startX = e.clientX - posX;
+        startY = e.clientY - posY;
+        e.preventDefault();
     });
     window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
-        posX = e.clientX - startX; posY = e.clientY - startY;
+        const currentX = e.clientX - startX;
+        const currentY = e.clientY - startY;
+        
+        // Si hay movimiento real, se considera paneo y no un toque
+        if (Math.abs(currentX - posX) > 3 || Math.abs(currentY - posY) > 3) {
+            haHechoPaneo = true;
+        }
+        posX = currentX; posY = currentY;
         limitarYAplicarTransformacion();
     });
     window.addEventListener('mouseup', () => { isDragging = false; });
 
+    // Eventos Touch (iPhone)
     dropZone.addEventListener('touchstart', (e) => {
-        if (scale > 1 && e.touches.length === 1) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; }
+        if (e.touches.length === 1) {
+            isDragging = true;
+            haHechoPaneo = false;
+            startX = e.touches[0].clientX - posX;
+            startY = e.touches[0].clientY - posY;
+        }
     }, {passive: true});
     window.addEventListener('touchmove', (e) => {
         if (!isDragging || e.touches.length !== 1) return;
-        posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY;
+        const currentX = e.touches[0].clientX - startX;
+        const currentY = e.touches[0].clientY - startY;
+        
+        if (Math.abs(currentX - posX) > 3 || Math.abs(currentY - posY) > 3) {
+            haHechoPaneo = true;
+        }
+        posX = currentX; posY = currentY;
         limitarYAplicarTransformacion();
     });
-    window.addEventListener('touchend', () => { isDragging = false; });
+    window.addEventListener('touchend', (e) => {
+        isDragging = false;
+    });
 
     function limitarYAplicarTransformacion() {
         if (scale === 1) { posX = 0; posY = 0; }
@@ -436,10 +447,7 @@
     }
 
     function balancearProporciones(llaveModificada, nuevoValor, esFinDelGesto = false) {
-        // Antes de alterar el estado, si es el inicio de un cambio confirmado, guardamos el estado viejo
-        if (esFinDelGesto) {
-            guardarEstadoEnHistorial();
-        }
+        if (esFinDelGesto) guardarEstadoEnHistorial();
 
         nuevoValor = Math.min(100, Math.max(0, nuevoValor));
         const antiguoValor = currentProportions[llaveModificada];
@@ -495,15 +503,8 @@
                 sliders[key].disabled = false;
                 
                 const nuevoInput = document.getElementById(`num-${key}`);
-                
-                // Eventos de teclado numérico
-                nuevoInput.addEventListener('focus', () => {
-                    // Guardar el estado justo antes de que el usuario empiece a escribir
-                    guardarEstadoEnHistorial();
-                });
-                nuevoInput.addEventListener('input', (e) => {
-                    balancearProporciones(key, parseInt(e.target.value) || 0, false);
-                });
+                nuevoInput.addEventListener('focus', () => { guardarEstadoEnHistorial(); });
+                nuevoInput.addEventListener('input', (e) => { balancearProporciones(key, parseInt(e.target.value) || 0, false); });
                 nuevoInput.addEventListener('click', (e) => {
                     e.stopPropagation();
                     setTimeout(() => { nuevoInput.setSelectionRange(nuevoInput.value.length, nuevoInput.value.length); }, 10);
@@ -523,14 +524,10 @@
         hexDisplay.textContent = hex.toUpperCase();
     }
 
-    // Eventos de Sliders de Pintura con soporte para registrar historial al soltar el control
     Object.keys(sliders).forEach(key => {
         sliders[key].addEventListener('mousedown', () => { guardarEstadoEnHistorial(); });
         sliders[key].addEventListener('touchstart', () => { guardarEstadoEnHistorial(); }, {passive: true});
-        
-        sliders[key].addEventListener('input', (e) => {
-            balancearProporciones(key, parseInt(e.target.value), false);
-        });
+        sliders[key].addEventListener('input', (e) => { balancearProporciones(key, parseInt(e.target.value), false); });
     });
 
     modeToggle.addEventListener('change', (e) => {
@@ -570,34 +567,59 @@
         return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
     }
 
-    previewImage.addEventListener('click', function(e) {
-        if (isDragging) return;
+    // CORRECCIÓN CLAVE: Captura milimétrica adaptada a Zoom y Desplazamiento
+    dropZone.addEventListener('click', function(e) {
+        // Si el usuario estaba arrastrando la foto para encuadrar, cancelamos la captura de color
+        if (haHechoPaneo || !previewImage.src) return;
         e.stopPropagation();
 
-        // Antes de capturar el nuevo color de la foto, guardamos el que estaba en el historial
         guardarEstadoEnHistorial();
 
         canvasAux.width = previewImage.naturalWidth;
         canvasAux.height = previewImage.naturalHeight;
         ctxAux.drawImage(previewImage, 0, 0);
 
-        const rect = previewImage.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * canvasAux.width;
-        const y = ((e.clientY - rect.top) / rect.height) * canvasAux.height;
+        // Obtener geometría del marco contenedor contenedor de la foto
+        const rectZone = dropZone.getBoundingClientRect();
+        
+        // Encontrar el centro exacto del contenedor contenedor
+        const centroZonaX = rectZone.left + rectZone.width / 2;
+        const centroZonaY = rectZone.top + rectZone.height / 2;
 
-        const pixelData = ctxAux.getImageData(x, y, 1, 1).data;
-        const ryb = rgbToRyb(pixelData[0], pixelData[1], pixelData[2]);
-        const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
+        // Calcular en qué punto de la pantalla se encuentra el centro real de la imagen con zoom aplicado
+        const centroImgX = centroZonaX + posX;
+        const centroImgY = centroZonaY + posY;
 
-        if (total > 0) {
-            Object.keys(currentProportions).forEach(key => {
-                currentProportions[key] = (ryb[key] / total) * 100;
-            });
-            renderizarHerramienta();
+        // Determinar a cuántos píxeles de distancia del centro real de la foto hizo clic el usuario
+        const clickDistanciaCentroX = e.clientX - centroImgX;
+        const clickDistanciaCentroY = e.clientY - centroImgY;
+
+        // Remover matemáticamente el factor multiplicador del Zoom (scale)
+        const xEnRenderOriginal = (previewImage.offsetWidth / 2) + (clickDistanciaCentroX / scale);
+        const yEnRenderOriginal = (previewImage.offsetHeight / 2) + (clickDistanciaCentroY / scale);
+
+        // Convertir la proporción obtenida a la resolución nativa y real del archivo cargado
+        const xReal = (xEnRenderOriginal / previewImage.offsetWidth) * canvasAux.width;
+        const yReal = (yEnRenderOriginal / previewImage.offsetHeight) * canvasAux.height;
+
+        // Control de seguridad perimetral para evitar coordenadas negativas o fuera de imagen
+        if (xReal >= 0 && xReal <= canvasAux.width && yReal >= 0 && yReal <= canvasAux.height) {
+            const pixelData = ctxAux.getImageData(xReal, yReal, 1, 1).data;
+            
+            // Si el píxel es totalmente transparente, ignorar captura
+            if (pixelData[3] === 0) return;
+
+            const ryb = rgbToRyb(pixelData[0], pixelData[1], pixelData[2]);
+            const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
+
+            if (total > 0) {
+                Object.keys(currentProportions).forEach(key => {
+                    currentProportions[key] = (ryb[key] / total) * 100;
+                });
+                renderizarHerramienta();
+            }
         }
     });
-
-    renderizarHerramienta();
 </script>
 
 </body>
