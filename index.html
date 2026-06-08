@@ -38,7 +38,6 @@
             padding: 0;
             text-align: center;
             background: #fbfbfd;
-            cursor: pointer;
             position: relative;
             overflow: hidden;
             height: 250px;
@@ -54,10 +53,11 @@
             position: absolute;
             user-select: none;
             -webkit-user-drag: none;
+            display: none;
+            z-index: 1;
         }
         .upload-prompt-wrap {
             padding: 20px;
-            pointer-events: none;
             z-index: 2;
         }
         .upload-btn {
@@ -70,7 +70,6 @@
             font-weight: 500;
             margin-top: 8px;
             cursor: pointer;
-            pointer-events: auto;
         }
         #fileInput { display: none; }
 
@@ -124,10 +123,6 @@
             border-color: #e5e5e7;
             cursor: not-allowed;
             opacity: 0.6;
-        }
-        .undo-btn:not(:disabled):hover {
-            background-color: #e8e8ed;
-            border-color: #86868b;
         }
         
         .mode-switch-container {
@@ -326,6 +321,7 @@
 <canvas id="canvasAux" style="display:none;"></canvas>
 
 <script>
+    // Inicialización limpia y fija para evitar saltos fantasmas de color
     let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
     let undoStack = []; 
     let esModoPartes = false;
@@ -367,7 +363,7 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
-    // Coordenadas globales de paneo y control de arrastre
+    // Sistema de Paneo (Arrastre)
     let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0, haHechoPaneo = false;
 
     zoomSlider.addEventListener('input', (e) => {
@@ -376,51 +372,38 @@
         limitarYAplicarTransformacion();
     });
 
-    // Eventos Mouse
+    // Control de Arrastre - Mouse
     dropZone.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        haHechoPaneo = false;
-        startX = e.clientX - posX;
-        startY = e.clientY - posY;
+        if (!previewImage.src) return;
+        isDragging = true; haHechoPaneo = false;
+        startX = e.clientX - posX; startY = e.clientY - posY;
         e.preventDefault();
     });
     window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
-        const currentX = e.clientX - startX;
-        const currentY = e.clientY - startY;
-        
-        // Si hay movimiento real, se considera paneo y no un toque
-        if (Math.abs(currentX - posX) > 3 || Math.abs(currentY - posY) > 3) {
-            haHechoPaneo = true;
-        }
+        const currentX = e.clientX - startX; const currentY = e.clientY - startY;
+        if (Math.abs(currentX - posX) > 5 || Math.abs(currentY - posY) > 5) haHechoPaneo = true;
         posX = currentX; posY = currentY;
         limitarYAplicarTransformacion();
     });
     window.addEventListener('mouseup', () => { isDragging = false; });
 
-    // Eventos Touch (iPhone)
+    // Control de Arrastre - Táctil (iPhone)
     dropZone.addEventListener('touchstart', (e) => {
+        if (!previewImage.src) return;
         if (e.touches.length === 1) {
-            isDragging = true;
-            haHechoPaneo = false;
-            startX = e.touches[0].clientX - posX;
-            startY = e.touches[0].clientY - posY;
+            isDragging = true; haHechoPaneo = false;
+            startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
         }
     }, {passive: true});
     window.addEventListener('touchmove', (e) => {
         if (!isDragging || e.touches.length !== 1) return;
-        const currentX = e.touches[0].clientX - startX;
-        const currentY = e.touches[0].clientY - startY;
-        
-        if (Math.abs(currentX - posX) > 3 || Math.abs(currentY - posY) > 3) {
-            haHechoPaneo = true;
-        }
+        const currentX = e.touches[0].clientX - startX; const currentY = e.touches[0].clientY - startY;
+        if (Math.abs(currentX - posX) > 5 || Math.abs(currentY - posY) > 5) haHechoPaneo = true;
         posX = currentX; posY = currentY;
         limitarYAplicarTransformacion();
     });
-    window.addEventListener('touchend', (e) => {
-        isDragging = false;
-    });
+    window.addEventListener('touchend', () => { isDragging = false; });
 
     function limitarYAplicarTransformacion() {
         if (scale === 1) { posX = 0; posY = 0; }
@@ -567,10 +550,9 @@
         return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
     }
 
-    // CORRECCIÓN CLAVE: Captura milimétrica adaptada a Zoom y Desplazamiento
-    dropZone.addEventListener('click', function(e) {
-        // Si el usuario estaba arrastrando la foto para encuadrar, cancelamos la captura de color
-        if (haHechoPaneo || !previewImage.src) return;
+    // SOLUCIÓN CLAVE: Lógica nativa de captura atada directamente a la etiqueta de imagen
+    previewImage.addEventListener('click', function(e) {
+        if (haHechoPaneo) return; // Si el usuario está arrastrando, no captura
         e.stopPropagation();
 
         guardarEstadoEnHistorial();
@@ -579,35 +561,20 @@
         canvasAux.height = previewImage.naturalHeight;
         ctxAux.drawImage(previewImage, 0, 0);
 
-        // Obtener geometría del marco contenedor contenedor de la foto
-        const rectZone = dropZone.getBoundingClientRect();
+        // Obtener las coordenadas del toque relativas estrictamente a la imagen renderizada en pantalla
+        const rectImg = previewImage.getBoundingClientRect();
         
-        // Encontrar el centro exacto del contenedor contenedor
-        const centroZonaX = rectZone.left + rectZone.width / 2;
-        const centroZonaY = rectZone.top + rectZone.height / 2;
+        // Calcular la posición exacta en porcentaje respecto al contenedor visual de la imagen
+        const clickXVisual = e.clientX - rectImg.left;
+        const clickYVisual = e.clientY - rectImg.top;
 
-        // Calcular en qué punto de la pantalla se encuentra el centro real de la imagen con zoom aplicado
-        const centroImgX = centroZonaX + posX;
-        const centroImgY = centroZonaY + posY;
+        // Proyectar de forma directa a la resolución nativa de la matriz de la foto
+        const xReal = (clickXVisual / rectImg.width) * canvasAux.width;
+        const yReal = (clickYVisual / rectImg.height) * canvasAux.height;
 
-        // Determinar a cuántos píxeles de distancia del centro real de la foto hizo clic el usuario
-        const clickDistanciaCentroX = e.clientX - centroImgX;
-        const clickDistanciaCentroY = e.clientY - centroImgY;
-
-        // Remover matemáticamente el factor multiplicador del Zoom (scale)
-        const xEnRenderOriginal = (previewImage.offsetWidth / 2) + (clickDistanciaCentroX / scale);
-        const yEnRenderOriginal = (previewImage.offsetHeight / 2) + (clickDistanciaCentroY / scale);
-
-        // Convertir la proporción obtenida a la resolución nativa y real del archivo cargado
-        const xReal = (xEnRenderOriginal / previewImage.offsetWidth) * canvasAux.width;
-        const yReal = (yEnRenderOriginal / previewImage.offsetHeight) * canvasAux.height;
-
-        // Control de seguridad perimetral para evitar coordenadas negativas o fuera de imagen
         if (xReal >= 0 && xReal <= canvasAux.width && yReal >= 0 && yReal <= canvasAux.height) {
             const pixelData = ctxAux.getImageData(xReal, yReal, 1, 1).data;
-            
-            // Si el píxel es totalmente transparente, ignorar captura
-            if (pixelData[3] === 0) return;
+            if (pixelData[3] === 0) return; // Ignorar píxeles vacíos
 
             const ryb = rgbToRyb(pixelData[0], pixelData[1], pixelData[2]);
             const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
