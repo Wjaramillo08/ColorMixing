@@ -61,12 +61,14 @@
             z-index: 1;
         }
         
-        /* Rueda Cromática interactiva */
+        /* Rueda Cromática interactiva ajustada */
         #wheelCanvas {
             display: none;
             position: absolute;
-            z-index: 2;
+            z-index: 10;
             cursor: pointer;
+            background: #ffffff;
+            border-radius: 8px;
         }
 
         .upload-prompt-wrap {
@@ -579,7 +581,7 @@
     }
 
     // --- EDICIÓN MANUAL DEL CÓDIGO HEXADECIMAL ---
-    hexInput.addEventListener('change', () => {
+    function aplicarHexManual() {
         let val = hexInput.value.trim().replace('#', '');
         if (/^[0-9A-Fa-f]{6}$/.test(val)) {
             guardarEstadoEnHistorial(false);
@@ -596,12 +598,18 @@
                 renderizarHerramienta();
             }
         } else {
-            renderizarHerramienta(); // Restablecer el valor válido actual si era erróneo
+            renderizarHerramienta();
         }
+    }
+
+    hexInput.addEventListener('change', aplicarHexManual);
+    hexInput.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') aplicarHexManual();
     });
 
     // --- RUEDA CROMÁTICA INTERACTIVA ---
-    colorDisplay.addEventListener('click', () => {
+    colorDisplay.addEventListener('click', (e) => {
+        e.stopPropagation();
         modoRuedaActivo = !modoRuedaActivo;
         if (modoRuedaActivo) {
             wheelCanvas.style.display = 'block';
@@ -623,7 +631,6 @@
         
         ctx.clearRect(0, 0, width, height);
 
-        // Generación del disco radial de color
         for (let x = -radius; x < radius; x++) {
             for (let y = -radius; y < radius; y++) {
                 const distance = Math.sqrt(x * x + y * y);
@@ -632,21 +639,14 @@
                     if (angle < 0) angle += 360;
                     
                     const sat = distance / radius;
-                    ctx.fillStyle = `hsl(${angle},${sat * 100}%, 50%)`;
+                    ctx.fillStyle = `hsl(${angle}, ${sat * 100}%, 50%)`;
                     ctx.fillRect(width / 2 + x, height / 2 + y, 1, 1);
                 }
             }
         }
 
-        // Posicionar el pequeño indicador circular según el tono del color actual
-        const rMat = currentProportions.r/100, yMat = currentProportions.y/100, bMat = currentProportions.b/100;
-        let rgbBase = interpolarRyb(rMat, yMat, bMat);
-        const factorK = 1 - (currentProportions.k/100);
-        let r = rgbBase[0]*factorK, g = rgbBase[1]*factorK, b = rgbBase[2]*factorK;
-        const factorW = currentProportions.w/100;
-        r = r*(1-factorW)+factorW; g = g*(1-factorW)+factorW; b = b*(1-factorW)+factorW;
-        
-        const hsl = rgbToHsl(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+        const rgbCurrent = obtenerRgbActual();
+        const hsl = rgbToHsl(rgbCurrent.r, rgbCurrent.g, rgbCurrent.b);
         const angleRad = hsl.h * (Math.PI / 180);
         const distPx = hsl.s * radius;
 
@@ -697,7 +697,6 @@
                     currentProportions[key] = (ryb[key] / total) * 100;
                 });
                 renderizarHerramienta();
-                dibujarRuedaCromatica();
             }
         }
     }
@@ -764,7 +763,7 @@
         else if (residuo >= 0.062) fraccionStr = "1/8";
 
         if (fraccionStr === "1") return (entero + 1) + "";
-        if (entero > 0) return fraccionStr !== "" ? `${entero}${fraccionStr}` : `${entero}`;
+        if (entero > 0) return fraccionStr !== "" ? `${entero} ${fraccionStr}` : `${entero}`;
         return fraccionStr !== "" ? fraccionStr : "0";
     }
 
@@ -802,14 +801,42 @@
 
     const RYB_CUBE = [[1,1,1], [1,1,0], [1,0,0], [1,0.5,0], [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]];
     
-    function interpolarRyb(r, y, b) {
+    function interpolarRyb(rN, yN, bN) {
         let rgb = [0, 0, 0];
         for (let i = 0; i < 3; i++) {
-            const c00 = RYB_CUBE[0][i]*(1-r)+RYB_CUBE[2][i]*r, c10 = RYB_CUBE[1][i]*(1-r)+RYB_CUBE[3][i]*r;
-            const c01 = RYB_CUBE[4][i]*(1-r)+RYB_CUBE[6][i]*r, c11 = RYB_CUBE[5][i]*(1-r)+RYB_CUBE[7][i]*r;
-            rgb[i] = (c00*(1-y)+c10*y)*(1-b) + (c01*(1-y)+c11*y)*b;
+            const c000 = RYB_CUBE[0][i], c100 = RYB_CUBE[2][i], c010 = RYB_CUBE[1][i], c110 = RYB_CUBE[3][i],
+                  c001 = RYB_CUBE[4][i], c101 = RYB_CUBE[6][i], c011 = RYB_CUBE[5][i], c111 = RYB_CUBE[7][i];
+            const c00 = c000 * (1 - rN) + c100 * rN;
+            const c10 = c010 * (1 - rN) + c110 * rN;
+            const c01 = c001 * (1 - rN) + c101 * rN;
+            const c11 = c011 * (1 - rN) + c111 * rN;
+            const c0 = c00 * (1 - yN) + c10 * yN; const c1 = c01 * (1 - yN) + c11 * yN;
+            rgb[i] = c0 * (1 - bN) + c1 * bN;
         }
         return rgb;
+    }
+
+    function obtenerRgbActual() {
+        const rMat = currentProportions.r / 100;
+        const yMat = currentProportions.y / 100;
+        const bMat = currentProportions.b / 100;
+        
+        let rgbBase = interpolarRyb(rMat, yMat, bMat);
+        const factorK = 1 - (currentProportions.k / 100);
+        let r = rgbBase[0] * factorK;
+        let g = rgbBase[1] * factorK;
+        let b = rgbBase[2] * factorK;
+        
+        const factorW = currentProportions.w / 100;
+        r = r * (1 - factorW) + factorW;
+        g = g * (1 - factorW) + factorW;
+        b = b * (1 - factorW) + factorW;
+
+        return {
+            r: Math.min(255, Math.max(0, Math.round(r * 255))),
+            g: Math.min(255, Math.max(0, Math.round(g * 255))),
+            b: Math.min(255, Math.max(0, Math.round(b * 255)))
+        };
     }
 
     function renderizarHerramienta() {
@@ -834,17 +861,13 @@
             }
         });
 
-        const rMat = currentProportions.r/100, yMat = currentProportions.y/100, bMat = currentProportions.b/100;
-        let rgbBase = interpolarRyb(rMat, yMat, bMat);
-        const factorK = 1 - (currentProportions.k/100);
-        let r = rgbBase[0]*factorK, g = rgbBase[1]*factorK, b = rgbBase[2]*factorK;
-        const factorW = currentProportions.w/100;
-        r = r*(1-factorW)+factorW; g = g*(1-factorW)+factorW; b = b*(1-factorW)+factorW;
-
-        const hexClean = [r,g,b].map(c => Math.min(255, Math.max(0, Math.round(c*255))).toString(16).padStart(2, '0')).join('').toUpperCase();
+        const rgbObj = obtenerRgbActual();
+        const hexClean = [rgbObj.r, rgbObj.g, rgbObj.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
         
         colorDisplay.style.backgroundColor = '#' + hexClean;
-        hexInput.value = hexClean;
+        if (document.activeElement !== hexInput) {
+            hexInput.value = hexClean;
+        }
 
         if (modoRuedaActivo) dibujarRuedaCromatica();
     }
@@ -872,20 +895,20 @@
         renderizarListaGuardados();
     });
 
-    function cargarMezclaGuardada(id) {
+    window.cargarMezclaGuardada = function(id) {
         const item = savedColors.find(c => c.id === id);
         if (item) {
             guardarEstadoEnHistorial(false);
             currentProportions = { ...item.proportions };
             renderizarHerramienta();
         }
-    }
+    };
 
-    function borrarMezclaGuardada(id) {
+    window.borrarMezclaGuardada = function(id) {
         savedColors = savedColors.filter(c => c.id !== id);
         localStorage.setItem('savedPalettes', JSON.stringify(savedColors));
         renderizarListaGuardados();
-    }
+    };
 
     function renderizarListaGuardados() {
         if (savedColors.length === 0) {
@@ -895,7 +918,7 @@
 
         savedList.innerHTML = savedColors.map(item => {
             const p = item.proportions;
-            const resumenText = `R:${Math.round(p.r)}% Y:${Math.round(p.y)}\% B:${Math.round(p.b)}% K:${Math.round(p.k)}\% W:${Math.round(p.w)}%`;
+            const resumenText = `R:${Math.round(p.r)}% Y:${Math.round(p.y)}% B:${Math.round(p.b)}% K:${Math.round(p.k)}% W:${Math.round(p.w)}%`;
             return `
                 <div class="saved-card">
                     <div class="saved-card-left">
@@ -907,4 +930,103 @@
                     </div>
                     <div class="saved-actions">
                         <button class="btn-small" onclick="cargarMezclaGuardada(${item.id})">Cargar</button>
-                        <button class="btn-small btn-del" onclick="borrarMezclaGuardada(${item.id})">✕
+                        <button class="btn-small btn-del" onclick="borrarMezclaGuardada(${item.id})">✕</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    const fileInput = document.getElementById('fileInput');
+    const canvasAux = document.getElementById('canvasAux');
+    const ctxAux = canvasAux.getContext('2d');
+
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                previewImage.src = event.target.result;
+                previewImage.style.display = 'block';
+                wheelCanvas.style.display = 'none';
+                modoRuedaActivo = false;
+                uploadPrompt.style.display = 'none';
+                zoomSlider.disabled = false;
+                scale = 1; posX = 0; posY = 0; zoomSlider.value = 1; zoomVal.textContent = "1.0x";
+                limitarYAplicarTransformacion();
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    function rgbToRyb(r, g, b) {
+        const w = Math.min(r, g, b);
+        let rMat = r - w, gMat = g - w, bMat = b - w;
+        let y = Math.min(rMat, gMat); rMat -= y; gMat -= y;
+        if (bMat > 0 && gMat > 0) { bMat /= 2; gMat /= 2; }
+        y += gMat;
+        return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
+    }
+
+    previewImage.addEventListener('click', function(e) {
+        if (haHechoPaneo || modoRuedaActivo) return; 
+        e.stopPropagation();
+
+        guardarEstadoEnHistorial(true);
+
+        canvasAux.width = previewImage.naturalWidth;
+        canvasAux.height = previewImage.naturalHeight;
+        ctxAux.drawImage(previewImage, 0, 0);
+
+        const rectImg = previewImage.getBoundingClientRect();
+        const clickXVisual = e.clientX - rectImg.left;
+        const clickYVisual = e.clientY - rectImg.top;
+
+        const xCenterX = Math.floor((clickXVisual / rectImg.width) * canvasAux.width);
+        const yCenterY = Math.floor((clickYVisual / rectImg.height) * canvasAux.height);
+
+        const size = parseInt(sampleSizeSelect.value) || 1;
+        const half = Math.floor(size / 2);
+
+        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+
+        for (let dx = -half; dx <= half; dx++) {
+            for (let dy = -half; dy <= half; dy++) {
+                const px = xCenterX + dx;
+                const py = yCenterY + dy;
+
+                if (px >= 0 && px < canvasAux.width && py >= 0 && py < canvasAux.height) {
+                    const data = ctxAux.getImageData(px, py, 1, 1).data;
+                    if (data[3] > 0) { 
+                        sumR += data[0];
+                        sumG += data[1];
+                        sumB += data[2];
+                        count++;
+                    }
+                }
+            }
+        }
+
+        if (count > 0) {
+            const avgR = Math.round(sumR / count);
+            const avgG = Math.round(sumG / count);
+            const avgB = Math.round(sumB / count);
+
+            const ryb = rgbToRyb(avgR, avgG, avgB);
+            const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
+
+            if (total > 0) {
+                Object.keys(currentProportions).forEach(key => {
+                    currentProportions[key] = (ryb[key] / total) * 100;
+                });
+                renderizarHerramienta();
+            }
+        }
+    });
+
+    renderizarHerramienta();
+    renderizarListaGuardados();
+</script>
+
+</body>
+</html>
