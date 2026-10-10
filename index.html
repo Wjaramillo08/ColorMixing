@@ -60,6 +60,15 @@
             display: none;
             z-index: 1;
         }
+        
+        /* Rueda Cromática interactiva */
+        #wheelCanvas {
+            display: none;
+            position: absolute;
+            z-index: 2;
+            cursor: pointer;
+        }
+
         .upload-prompt-wrap {
             padding: 15px;
             z-index: 2;
@@ -124,6 +133,39 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             border: 3px solid #ffffff;
             outline: 1px solid #d2d2d7;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+        #colorDisplay:active {
+            transform: scale(0.95);
+        }
+
+        /* Input del Código Hexadecimal Editable */
+        .hex-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: #f5f5f7;
+            padding: 2px 8px;
+            border-radius: 6px;
+            border: 1px solid #d2d2d7;
+        }
+        .hex-input-wrap span {
+            font-family: monospace;
+            font-size: 14px;
+            color: #86868b;
+            font-weight: 600;
+        }
+        #hexInput {
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1d1d1f;
+            border: none;
+            background: transparent;
+            width: 70px;
+            outline: none;
+            text-transform: uppercase;
         }
 
         .action-buttons {
@@ -289,7 +331,6 @@
             white-space: nowrap;
         }
 
-        /* Lista de Colores Guardados */
         .saved-colors-list {
             display: flex;
             flex-direction: column;
@@ -363,6 +404,9 @@
             </div>
             <input type="file" id="fileInput" accept="image/*">
             <img id="previewImage" alt="Previsualización">
+            
+            <!-- Lienzo de la Rueda Cromática -->
+            <canvas id="wheelCanvas" width="200" height="200"></canvas>
         </div>
     </div>
 
@@ -385,8 +429,14 @@
     </div>
 
     <div class="selector-zone">
-        <div id="colorDisplay"></div>
-        <div id="hexDisplay" style="font-family: monospace; font-size: 14px; color: #86868b;">#E67E22</div>
+        <!-- Tocar el círculo activa/desactiva la rueda cromática arriba -->
+        <div id="colorDisplay" title="Toca para desplegar la rueda de color"></div>
+        
+        <!-- Código Hexadecimal Editable -->
+        <div class="hex-input-wrap">
+            <span>#</span>
+            <input type="text" id="hexInput" value="E67E22" maxlength="6">
+        </div>
         
         <div class="action-buttons">
             <button id="undoBtn" class="btn-sec" disabled>⤺ Deshacer (0)</button>
@@ -466,15 +516,19 @@
     let esModoPartes = false;
     let ultimoCambioFueFoto = false;
     let estadoPrevioAFoto = null; 
+    let modoRuedaActivo = false;
 
     const colorDisplay = document.getElementById('colorDisplay');
-    const hexDisplay = document.getElementById('hexDisplay');
+    const hexInput = document.getElementById('hexInput');
     const modeToggle = document.getElementById('modeToggle');
     const zoomSlider = document.getElementById('zoomSlider');
     const zoomVal = document.getElementById('zoomVal');
     const sampleSizeSelect = document.getElementById('sampleSize');
     const previewImage = document.getElementById('previewImage');
     const dropZone = document.getElementById('dropZone');
+    const uploadPrompt = document.getElementById('uploadPrompt');
+    const wheelCanvas = document.getElementById('wheelCanvas');
+    const ctxWheel = wheelCanvas.getContext('2d');
     const undoBtn = document.getElementById('undoBtn');
     const saveBtn = document.getElementById('saveBtn');
     const savedList = document.getElementById('savedList');
@@ -524,6 +578,132 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
+    // --- EDICIÓN MANUAL DEL CÓDIGO HEXADECIMAL ---
+    hexInput.addEventListener('change', () => {
+        let val = hexInput.value.trim().replace('#', '');
+        if (/^[0-9A-Fa-f]{6}$/.test(val)) {
+            guardarEstadoEnHistorial(false);
+            const r = parseInt(val.slice(0, 2), 16);
+            const g = parseInt(val.slice(2, 4), 16);
+            const b = parseInt(val.slice(4, 6), 16);
+            
+            const ryb = rgbToRyb(r, g, b);
+            const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
+            if (total > 0) {
+                Object.keys(currentProportions).forEach(key => {
+                    currentProportions[key] = (ryb[key] / total) * 100;
+                });
+                renderizarHerramienta();
+            }
+        } else {
+            renderizarHerramienta(); // Restablecer el valor válido actual si era erróneo
+        }
+    });
+
+    // --- RUEDA CROMÁTICA INTERACTIVA ---
+    colorDisplay.addEventListener('click', () => {
+        modoRuedaActivo = !modoRuedaActivo;
+        if (modoRuedaActivo) {
+            wheelCanvas.style.display = 'block';
+            if (previewImage.src) previewImage.style.display = 'none';
+            uploadPrompt.style.display = 'none';
+            dibujarRuedaCromatica();
+        } else {
+            wheelCanvas.style.display = 'none';
+            if (previewImage.src) previewImage.style.display = 'block';
+            else uploadPrompt.style.display = 'block';
+        }
+    });
+
+    function dibujarRuedaCromatica() {
+        const width = wheelCanvas.width;
+        const height = wheelCanvas.height;
+        const radius = width / 2 - 5;
+        const ctx = ctxWheel;
+        
+        ctx.clearRect(0, 0, width, height);
+
+        // Generación del disco radial de color
+        for (let x = -radius; x < radius; x++) {
+            for (let y = -radius; y < radius; y++) {
+                const distance = Math.sqrt(x * x + y * y);
+                if (distance <= radius) {
+                    let angle = Math.atan2(y, x) * (180 / Math.PI);
+                    if (angle < 0) angle += 360;
+                    
+                    const sat = distance / radius;
+                    ctx.fillStyle = `hsl(${angle},${sat * 100}%, 50%)`;
+                    ctx.fillRect(width / 2 + x, height / 2 + y, 1, 1);
+                }
+            }
+        }
+
+        // Posicionar el pequeño indicador circular según el tono del color actual
+        const rMat = currentProportions.r/100, yMat = currentProportions.y/100, bMat = currentProportions.b/100;
+        let rgbBase = interpolarRyb(rMat, yMat, bMat);
+        const factorK = 1 - (currentProportions.k/100);
+        let r = rgbBase[0]*factorK, g = rgbBase[1]*factorK, b = rgbBase[2]*factorK;
+        const factorW = currentProportions.w/100;
+        r = r*(1-factorW)+factorW; g = g*(1-factorW)+factorW; b = b*(1-factorW)+factorW;
+        
+        const hsl = rgbToHsl(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+        const angleRad = hsl.h * (Math.PI / 180);
+        const distPx = hsl.s * radius;
+
+        const pinX = width / 2 + distPx * Math.cos(angleRad);
+        const pinY = height / 2 + distPx * Math.sin(angleRad);
+
+        ctx.beginPath();
+        ctx.arc(pinX, pinY, 6, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#000000';
+        ctx.fill();
+    }
+
+    function rgbToHsl(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        if (max === min) { h = s = 0; }
+        else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h *= 60;
+        }
+        return { h, s, l };
+    }
+
+    function seleccionarColorDeRueda(e) {
+        const rect = wheelCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left - wheelCanvas.width / 2;
+        const y = e.clientY - rect.top - wheelCanvas.height / 2;
+        const radius = wheelCanvas.width / 2 - 5;
+        
+        const distance = Math.sqrt(x * x + y * y);
+        if (distance <= radius) {
+            guardarEstadoEnHistorial(true);
+            const imgData = ctxWheel.getImageData(e.clientX - rect.left, e.clientY - rect.top, 1, 1).data;
+            const ryb = rgbToRyb(imgData[0], imgData[1], imgData[2]);
+            const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
+            if (total > 0) {
+                Object.keys(currentProportions).forEach(key => {
+                    currentProportions[key] = (ryb[key] / total) * 100;
+                });
+                renderizarHerramienta();
+                dibujarRuedaCromatica();
+            }
+        }
+    }
+
+    wheelCanvas.addEventListener('click', seleccionarColorDeRueda);
+
     // Paneo y Zoom
     let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0, haHechoPaneo = false;
 
@@ -534,7 +714,7 @@
     });
 
     dropZone.addEventListener('mousedown', (e) => {
-        if (!previewImage.src) return;
+        if (!previewImage.src || modoRuedaActivo) return;
         isDragging = true; haHechoPaneo = false;
         startX = e.clientX - posX; startY = e.clientY - posY;
         e.preventDefault();
@@ -549,7 +729,7 @@
     window.addEventListener('mouseup', () => { isDragging = false; });
 
     dropZone.addEventListener('touchstart', (e) => {
-        if (!previewImage.src) return;
+        if (!previewImage.src || modoRuedaActivo) return;
         if (e.touches.length === 1) {
             isDragging = true; haHechoPaneo = false;
             startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
@@ -584,7 +764,7 @@
         else if (residuo >= 0.062) fraccionStr = "1/8";
 
         if (fraccionStr === "1") return (entero + 1) + "";
-        if (entero > 0) return fraccionStr !== "" ? `${entero} ${fraccionStr}` : `${entero}`;
+        if (entero > 0) return fraccionStr !== "" ? `${entero}${fraccionStr}` : `${entero}`;
         return fraccionStr !== "" ? fraccionStr : "0";
     }
 
@@ -661,9 +841,12 @@
         const factorW = currentProportions.w/100;
         r = r*(1-factorW)+factorW; g = g*(1-factorW)+factorW; b = b*(1-factorW)+factorW;
 
-        const hex = "#" + [r,g,b].map(c => Math.min(255, Math.max(0, Math.round(c*255))).toString(16).padStart(2, '0')).join('');
-        colorDisplay.style.backgroundColor = hex;
-        hexDisplay.textContent = hex.toUpperCase();
+        const hexClean = [r,g,b].map(c => Math.min(255, Math.max(0, Math.round(c*255))).toString(16).padStart(2, '0')).join('').toUpperCase();
+        
+        colorDisplay.style.backgroundColor = '#' + hexClean;
+        hexInput.value = hexClean;
+
+        if (modoRuedaActivo) dibujarRuedaCromatica();
     }
 
     Object.keys(sliders).forEach(key => {
@@ -680,9 +863,8 @@
         renderizarHerramienta();
     });
 
-    // Lógica para guardar y renderizar lista de Mezclas
     saveBtn.addEventListener('click', () => {
-        const hex = hexDisplay.textContent;
+        const hex = '#' + hexInput.value;
         const propCopia = { ...currentProportions };
         
         savedColors.unshift({ hex, proportions: propCopia, id: Date.now() });
@@ -713,7 +895,7 @@
 
         savedList.innerHTML = savedColors.map(item => {
             const p = item.proportions;
-            const resumenText = `R:${Math.round(p.r)}% Y:${Math.round(p.y)}% B:${Math.round(p.b)}% K:${Math.round(p.k)}% W:${Math.round(p.w)}%`;
+            const resumenText = `R:${Math.round(p.r)}% Y:${Math.round(p.y)}\% B:${Math.round(p.b)}% K:${Math.round(p.k)}\% W:${Math.round(p.w)}%`;
             return `
                 <div class="saved-card">
                     <div class="saved-card-left">
@@ -725,101 +907,4 @@
                     </div>
                     <div class="saved-actions">
                         <button class="btn-small" onclick="cargarMezclaGuardada(${item.id})">Cargar</button>
-                        <button class="btn-small btn-del" onclick="borrarMezclaGuardada(${item.id})">✕</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    const fileInput = document.getElementById('fileInput');
-    const canvasAux = document.getElementById('canvasAux');
-    const ctxAux = canvasAux.getContext('2d');
-
-    fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                previewImage.src = event.target.result;
-                previewImage.style.display = 'block';
-                document.getElementById('uploadPrompt').style.display = 'none';
-                zoomSlider.disabled = false;
-                scale = 1; posX = 0; posY = 0; zoomSlider.value = 1; zoomVal.textContent = "1.0x";
-                limitarYAplicarTransformacion();
-            }
-            reader.readAsDataURL(file);
-        }
-    });
-
-    function rgbToRyb(r, g, b) {
-        const w = Math.min(r, g, b);
-        let rMat = r - w, gMat = g - w, bMat = b - w;
-        let y = Math.min(rMat, gMat); rMat -= y; gMat -= y;
-        if (bMat > 0 && gMat > 0) { bMat /= 2; gMat /= 2; }
-        y += gMat;
-        return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
-    }
-
-    // MUESTREO POR PROMEDIO DE ÁREA (N x N)
-    previewImage.addEventListener('click', function(e) {
-        if (haHechoPaneo) return; 
-        e.stopPropagation();
-
-        guardarEstadoEnHistorial(true);
-
-        canvasAux.width = previewImage.naturalWidth;
-        canvasAux.height = previewImage.naturalHeight;
-        ctxAux.drawImage(previewImage, 0, 0);
-
-        const rectImg = previewImage.getBoundingClientRect();
-        const clickXVisual = e.clientX - rectImg.left;
-        const clickYVisual = e.clientY - rectImg.top;
-
-        const xCenterX = Math.floor((clickXVisual / rectImg.width) * canvasAux.width);
-        const yCenterY = Math.floor((clickYVisual / rectImg.height) * canvasAux.height);
-
-        const size = parseInt(sampleSizeSelect.value) || 1;
-        const half = Math.floor(size / 2);
-
-        let sumR = 0, sumG = 0, sumB = 0, count = 0;
-
-        for (let dx = -half; dx <= half; dx++) {
-            for (let dy = -half; dy <= half; dy++) {
-                const px = xCenterX + dx;
-                const py = yCenterY + dy;
-
-                if (px >= 0 && px < canvasAux.width && py >= 0 && py < canvasAux.height) {
-                    const data = ctxAux.getImageData(px, py, 1, 1).data;
-                    if (data[3] > 0) { 
-                        sumR += data[0];
-                        sumG += data[1];
-                        sumB += data[2];
-                        count++;
-                    }
-                }
-            }
-        }
-
-        if (count > 0) {
-            const avgR = Math.round(sumR / count);
-            const avgG = Math.round(sumG / count);
-            const avgB = Math.round(sumB / count);
-
-            const ryb = rgbToRyb(avgR, avgG, avgB);
-            const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
-
-            if (total > 0) {
-                Object.keys(currentProportions).forEach(key => {
-                    currentProportions[key] = (ryb[key] / total) * 100;
-                });
-                renderizarHerramienta();
-            }
-        }
-    });
-
-    renderizarListaGuardados();
-</script>
-
-</body>
-</html>
+                        <button class="btn-small btn-del" onclick="borrarMezclaGuardada(${item.id})">✕
