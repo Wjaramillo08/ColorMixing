@@ -77,19 +77,37 @@
         }
         #fileInput { display: none; }
 
-        .zoom-controls {
+        .toolbar-row {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             background: #f5f5f7;
             padding: 8px 12px;
             border-radius: 6px;
             margin-bottom: 15px;
-            font-size: 13px;
-            box-sizing: border-box;
+            font-size: 12px;
+            gap: 10px;
+        }
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-grow: 1;
         }
         .zoom-controls input[type="range"] {
             flex-grow: 1;
+        }
+        .sample-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .sample-controls select {
+            font-size: 12px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            border: 1px solid #d2d2d7;
+            background: #fff;
         }
 
         .selector-zone {
@@ -108,7 +126,11 @@
             outline: 1px solid #d2d2d7;
         }
 
-        .undo-btn {
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-sec {
             background-color: #f5f5f7;
             color: #0066cc;
             border: 1px solid #d2d2d7;
@@ -119,10 +141,10 @@
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             transition: all 0.2s ease;
         }
-        .undo-btn:disabled {
+        .btn-sec:disabled {
             color: #86868b;
             background-color: #f5f5f7;
             border-color: #e5e5e7;
@@ -185,7 +207,6 @@
             padding-bottom: 4px;
         }
 
-        /* Contenedor de barra optimizado para filas móviles */
         .slider-container {
             display: flex;
             align-items: center;
@@ -226,7 +247,6 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
-        /* Caja derecha corregida para iPhone */
         .right-display {
             width: 55px;
             text-align: right;
@@ -252,7 +272,6 @@
             -moz-appearance: textfield;
             margin: 0;
         }
-        /* Eliminar flechas molestas que rompen el layout en Safari e iOS */
         .percentage-input::-webkit-outer-spin-button,
         .percentage-input::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -268,6 +287,66 @@
             color: #1d1d1f;
             text-align: right;
             white-space: nowrap;
+        }
+
+        /* Lista de Colores Guardados */
+        .saved-colors-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .saved-card {
+            display: flex;
+            align-items: center;
+            background: #f5f5f7;
+            padding: 8px 12px;
+            border-radius: 8px;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .saved-card-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .saved-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+        .saved-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .saved-hex {
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .saved-details {
+            font-size: 11px;
+            color: #86868b;
+        }
+        .saved-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .btn-small {
+            background: #ffffff;
+            border: 1px solid #d2d2d7;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #0066cc;
+        }
+        .btn-del {
+            color: #ff3b30;
         }
     </style>
 </head>
@@ -287,16 +366,32 @@
         </div>
     </div>
 
-    <div class="zoom-controls">
-        <span>Zoom:</span>
-        <input type="range" id="zoomSlider" min="1" max="4" step="0.1" value="1" disabled>
-        <span id="zoomVal">1.0x</span>
+    <!-- Barra de Herramientas: Zoom + Muestreo -->
+    <div class="toolbar-row">
+        <div class="zoom-controls">
+            <span>Zoom:</span>
+            <input type="range" id="zoomSlider" min="1" max="4" step="0.1" value="1" disabled>
+            <span id="zoomVal">1.0x</span>
+        </div>
+        <div class="sample-controls">
+            <span>Muestra:</span>
+            <select id="sampleSize">
+                <option value="1">1x1</option>
+                <option value="3" selected>3x3</option>
+                <option value="5">5x5</option>
+                <option value="9">9x9</option>
+            </select>
+        </div>
     </div>
 
     <div class="selector-zone">
         <div id="colorDisplay"></div>
         <div id="hexDisplay" style="font-family: monospace; font-size: 14px; color: #86868b;">#E67E22</div>
-        <button id="undoBtn" class="undo-btn" disabled>⤺ Deshacer (0)</button>
+        
+        <div class="action-buttons">
+            <button id="undoBtn" class="btn-sec" disabled>⤺ Deshacer (0)</button>
+            <button id="saveBtn" class="btn-sec">💾 Guardar mezcla</button>
+        </div>
     </div>
 
     <div class="mode-switch-container">
@@ -311,40 +406,53 @@
     <div class="section-title" id="panelTitle">Proporciones de la Paleta</div>
     
     <div id="paint-sliders">
+        <!-- Rojo -->
         <div class="slider-container">
             <div class="label" style="background-color: #ff3b30; color: #ffffff;">Rojo</div>
             <div class="slider-wrapper"><input type="range" id="slider-r" min="0" max="100" value="43"></div>
             <div class="right-display" id="box-r">
-                <input type="number" id="num-r" class="percentage-input" min="0" max="100" value="43">%
+                <input type="number" id="num-r" class="percentage-input" min="0" max="100" value="43"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>
             </div>
         </div>
+        <!-- Amarillo -->
         <div class="slider-container">
             <div class="label" style="background-color: #ffcc00; color: #1d1d1f;">Amarillo</div>
             <div class="slider-wrapper"><input type="range" id="slider-y" min="0" max="100" value="40"></div>
             <div class="right-display" id="box-y">
-                <input type="number" id="num-y" class="percentage-input" min="0" max="100" value="40">%
+                <input type="number" id="num-y" class="percentage-input" min="0" max="100" value="40"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>
             </div>
         </div>
+        <!-- Azul -->
         <div class="slider-container">
             <div class="label" style="background-color: #0055b8; color: #ffffff;">Azul</div>
             <div class="slider-wrapper"><input type="range" id="slider-b" min="0" max="100" value="0"></div>
             <div class="right-display" id="box-b">
-                <input type="number" id="num-b" class="percentage-input" min="0" max="100" value="0">%
+                <input type="number" id="num-b" class="percentage-input" min="0" max="100" value="0"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>
             </div>
         </div>
+        <!-- Negro -->
         <div class="slider-container">
             <div class="label" style="background-color: #000000; color: #ffffff;">Negro</div>
             <div class="slider-wrapper"><input type="range" id="slider-k" min="0" max="100" value="3"></div>
             <div class="right-display" id="box-k">
-                <input type="number" id="num-k" class="percentage-input" min="0" max="100" value="3">%
+                <input type="number" id="num-k" class="percentage-input" min="0" max="100" value="3"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>
             </div>
         </div>
+        <!-- Blanco -->
         <div class="slider-container">
             <div class="label" style="background-color: #ffffff; color: #1d1d1f; border: 1px solid #d2d2d7;">Blanco</div>
             <div class="slider-wrapper"><input type="range" id="slider-w" min="0" max="100" value="14"></div>
             <div class="right-display" id="box-w">
-                <input type="number" id="num-w" class="percentage-input" min="0" max="100" value="14">%
+                <input type="number" id="num-w" class="percentage-input" min="0" max="100" value="14"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>
             </div>
+        </div>
+    </div>
+
+    <!-- Sección de Mezclas Guardadas -->
+    <div style="margin-top: 25px;">
+        <div class="section-title">Paleta Guardada</div>
+        <div id="savedList" class="saved-colors-list">
+            <div style="font-size: 12px; color: #86868b; text-align: center;">No hay mezclas guardadas aún.</div>
         </div>
     </div>
 </div>
@@ -354,6 +462,7 @@
 <script>
     let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
     let undoStack = []; 
+    let savedColors = JSON.parse(localStorage.getItem('savedPalettes') || '[]');
     let esModoPartes = false;
     let ultimoCambioFueFoto = false;
     let estadoPrevioAFoto = null; 
@@ -363,9 +472,12 @@
     const modeToggle = document.getElementById('modeToggle');
     const zoomSlider = document.getElementById('zoomSlider');
     const zoomVal = document.getElementById('zoomVal');
+    const sampleSizeSelect = document.getElementById('sampleSize');
     const previewImage = document.getElementById('previewImage');
     const dropZone = document.getElementById('dropZone');
     const undoBtn = document.getElementById('undoBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const savedList = document.getElementById('savedList');
     
     const sliders = { r: document.getElementById('slider-r'), y: document.getElementById('slider-y'), b: document.getElementById('slider-b'), k: document.getElementById('slider-k'), w: document.getElementById('slider-w') };
     const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
@@ -412,6 +524,7 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
+    // Paneo y Zoom
     let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0, haHechoPaneo = false;
 
     zoomSlider.addEventListener('input', (e) => {
@@ -528,7 +641,6 @@
                 boxes[key].innerHTML = `<span class="parts-text">${porcentajeAFraccionTexto(pct)}</span>`;
                 sliders[key].disabled = true;
             } else {
-                // Inyección limpia agregando el signo % afuera del input de forma compacta
                 boxes[key].innerHTML = `<input type="number" id="num-${key}" class="percentage-input" min="0" max="100" value="${Math.round(pct)}"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>`;
                 sliders[key].disabled = false;
                 
@@ -568,6 +680,58 @@
         renderizarHerramienta();
     });
 
+    // Lógica para guardar y renderizar lista de Mezclas
+    saveBtn.addEventListener('click', () => {
+        const hex = hexDisplay.textContent;
+        const propCopia = { ...currentProportions };
+        
+        savedColors.unshift({ hex, proportions: propCopia, id: Date.now() });
+        localStorage.setItem('savedPalettes', JSON.stringify(savedColors));
+        renderizarListaGuardados();
+    });
+
+    function cargarMezclaGuardada(id) {
+        const item = savedColors.find(c => c.id === id);
+        if (item) {
+            guardarEstadoEnHistorial(false);
+            currentProportions = { ...item.proportions };
+            renderizarHerramienta();
+        }
+    }
+
+    function borrarMezclaGuardada(id) {
+        savedColors = savedColors.filter(c => c.id !== id);
+        localStorage.setItem('savedPalettes', JSON.stringify(savedColors));
+        renderizarListaGuardados();
+    }
+
+    function renderizarListaGuardados() {
+        if (savedColors.length === 0) {
+            savedList.innerHTML = `<div style="font-size: 12px; color: #86868b; text-align: center;">No hay mezclas guardadas aún.</div>`;
+            return;
+        }
+
+        savedList.innerHTML = savedColors.map(item => {
+            const p = item.proportions;
+            const resumenText = `R:${Math.round(p.r)}% Y:${Math.round(p.y)}% B:${Math.round(p.b)}% K:${Math.round(p.k)}% W:${Math.round(p.w)}%`;
+            return `
+                <div class="saved-card">
+                    <div class="saved-card-left">
+                        <div class="saved-circle" style="background-color: ${item.hex};"></div>
+                        <div class="saved-info">
+                            <span class="saved-hex">${item.hex}</span>
+                            <span class="saved-details">${resumenText}</span>
+                        </div>
+                    </div>
+                    <div class="saved-actions">
+                        <button class="btn-small" onclick="cargarMezclaGuardada(${item.id})">Cargar</button>
+                        <button class="btn-small btn-del" onclick="borrarMezclaGuardada(${item.id})">✕</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
     const fileInput = document.getElementById('fileInput');
     const canvasAux = document.getElementById('canvasAux');
     const ctxAux = canvasAux.getContext('2d');
@@ -597,6 +761,7 @@
         return { r: rMat, y: y, b: bMat + gMat, k: 255 - Math.max(r, g, b), w: w };
     }
 
+    // MUESTREO POR PROMEDIO DE ÁREA (N x N)
     previewImage.addEventListener('click', function(e) {
         if (haHechoPaneo) return; 
         e.stopPropagation();
@@ -611,14 +776,37 @@
         const clickXVisual = e.clientX - rectImg.left;
         const clickYVisual = e.clientY - rectImg.top;
 
-        const xReal = (clickXVisual / rectImg.width) * canvasAux.width;
-        const yReal = (clickYVisual / rectImg.height) * canvasAux.height;
+        const xCenterX = Math.floor((clickXVisual / rectImg.width) * canvasAux.width);
+        const yCenterY = Math.floor((clickYVisual / rectImg.height) * canvasAux.height);
 
-        if (xReal >= 0 && xReal <= canvasAux.width && yReal >= 0 && yReal <= canvasAux.height) {
-            const pixelData = ctxAux.getImageData(xReal, yReal, 1, 1).data;
-            if (pixelData[3] === 0) return; 
+        const size = parseInt(sampleSizeSelect.value) || 1;
+        const half = Math.floor(size / 2);
 
-            const ryb = rgbToRyb(pixelData[0], pixelData[1], pixelData[2]);
+        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+
+        for (let dx = -half; dx <= half; dx++) {
+            for (let dy = -half; dy <= half; dy++) {
+                const px = xCenterX + dx;
+                const py = yCenterY + dy;
+
+                if (px >= 0 && px < canvasAux.width && py >= 0 && py < canvasAux.height) {
+                    const data = ctxAux.getImageData(px, py, 1, 1).data;
+                    if (data[3] > 0) { 
+                        sumR += data[0];
+                        sumG += data[1];
+                        sumB += data[2];
+                        count++;
+                    }
+                }
+            }
+        }
+
+        if (count > 0) {
+            const avgR = Math.round(sumR / count);
+            const avgG = Math.round(sumG / count);
+            const avgB = Math.round(sumB / count);
+
+            const ryb = rgbToRyb(avgR, avgG, avgB);
             const total = ryb.r + ryb.y + ryb.b + ryb.k + ryb.w;
 
             if (total > 0) {
@@ -629,6 +817,8 @@
             }
         }
     });
+
+    renderizarListaGuardados();
 </script>
 
 </body>
