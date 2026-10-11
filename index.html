@@ -501,6 +501,7 @@
 
 <script>
     let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
+    let currentHexColor = "E67E22";
     let undoStack = []; 
     let savedColors = JSON.parse(localStorage.getItem('savedPalettes') || '[]');
     let esModoPartes = false;
@@ -528,7 +529,7 @@
     const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
 
     function guardarEstadoEnHistorial(origenFoto = false) {
-        const copiaEstado = { ...currentProportions };
+        const copiaEstado = { proportions: { ...currentProportions }, hex: currentHexColor };
         if (origenFoto) {
             if (!ultimoCambioFueFoto) {
                 estadoPrevioAFoto = copiaEstado;
@@ -543,7 +544,11 @@
             estadoPrevioAFoto = null;
             if (undoStack.length > 0) {
                 const ultimo = undoStack[undoStack.length - 1];
-                if (ultimo.r === copiaEstado.r && ultimo.y === copiaEstado.y && ultimo.b === copiaEstado.b && ultimo.k === copiaEstado.k && ultimo.w === copiaEstado.w) {
+                if (ultimo.proportions.r === copiaEstado.proportions.r && 
+                    ultimo.proportions.y === copiaEstado.proportions.y && 
+                    ultimo.proportions.b === copiaEstado.proportions.b && 
+                    ultimo.proportions.k === copiaEstado.proportions.k && 
+                    ultimo.proportions.w === copiaEstado.proportions.w) {
                     return;
                 }
             }
@@ -555,13 +560,15 @@
 
     undoBtn.addEventListener('click', () => {
         if (undoStack.length === 0) return;
-        currentProportions = undoStack.pop();
+        const estadoAnterior = undoStack.pop();
+        currentProportions = estadoAnterior.proportions;
+        currentHexColor = estadoAnterior.hex;
         if (ultimoCambioFueFoto && undoStack.length === 0) {
             ultimoCambioFueFoto = false;
             estadoPrevioAFoto = null;
         }
         actualizarBotonUndo();
-        renderizarHerramienta();
+        renderizarHerramienta(true);
     });
 
     function actualizarBotonUndo() {
@@ -569,22 +576,15 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
-    // --- CONVERSIÓN PIGMENTARIA RYB CORREGIDA ---
     function rgbToRyb(r, g, b) {
-        let rN = r / 255;
-        let gN = g / 255;
-        let bN = b / 255;
-
+        let rN = r / 255, gN = g / 255, bN = b / 255;
         let w = Math.min(rN, gN, bN);
         let k = 1 - Math.max(rN, gN, bN);
 
-        let rP = rN - w;
-        let gP = gN - w;
-        let bP = bN - w;
+        let rP = rN - w, gP = gN - w, bP = bN - w;
 
         let yP = Math.min(rP, gP);
-        rP -= yP;
-        gP -= yP;
+        rP -= yP; gP -= yP;
 
         let bMix = bP + gP;
         let rMix = rP;
@@ -606,29 +606,16 @@
         let val = hexInput.value.trim().replace('#', '');
         if (/^[0-9A-Fa-f]{6}$/.test(val)) {
             guardarEstadoEnHistorial(false);
+            currentHexColor = val.toUpperCase();
+            
             const r = parseInt(val.slice(0, 2), 16);
             const g = parseInt(val.slice(2, 4), 16);
             const b = parseInt(val.slice(4, 6), 16);
             
-            const ryb = rgbToRyb(r, g, b);
-            currentProportions = ryb;
-            
-            colorDisplay.style.backgroundColor = '#' + val.toUpperCase();
-            
-            Object.keys(currentProportions).forEach(key => {
-                const pct = currentProportions[key];
-                sliders[key].value = Math.round(pct);
-                if (esModoPartes) {
-                    boxes[key].innerHTML = `<span class="parts-text">${porcentajeAFraccionTexto(pct)}</span>`;
-                } else {
-                    const numInput = document.getElementById(`num-${key}`);
-                    if (numInput) numInput.value = Math.round(pct);
-                }
-            });
-
-            if (modoRuedaActivo) dibujarRuedaCromatica();
+            currentProportions = rgbToRyb(r, g, b);
+            renderizarHerramienta(true);
         } else {
-            renderizarHerramienta();
+            renderizarHerramienta(true);
         }
     }
 
@@ -677,8 +664,11 @@
             }
         }
 
-        const rgbCurrent = obtenerRgbActual();
-        const hsl = rgbToHsl(rgbCurrent.r, rgbCurrent.g, rgbCurrent.b);
+        const r = parseInt(currentHexColor.slice(0, 2), 16);
+        const g = parseInt(currentHexColor.slice(2, 4), 16);
+        const b = parseInt(currentHexColor.slice(4, 6), 16);
+
+        const hsl = rgbToHsl(r, g, b);
         const angleRad = hsl.h * (Math.PI / 180);
         const distPx = hsl.s * radius;
 
@@ -712,24 +702,55 @@
         return { h, s, l };
     }
 
+    function hslToRgb(h, s, l) {
+        let r, g, b;
+        if (s === 0) {
+            r = g = b = l;
+        } else {
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+            };
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            r = hue2rgb(p, q, h / 360 + 1/3);
+            g = hue2rgb(p, q, h / 360);
+            b = hue2rgb(p, q, h / 360 - 1/3);
+        }
+        return {
+            r: Math.round(r * 255),
+            g: Math.round(g * 255),
+            b: Math.round(b * 255)
+        };
+    }
+
+    // --- SELECCIÓN Y ARRASTRE DE ALTA PRECISIÓN EN LA RUEDA ---
     function procesarSeleccionRueda(clientX, clientY) {
         const rect = wheelCanvas.getBoundingClientRect();
-        const localX = clientX - rect.left;
-        const localY = clientY - rect.top;
+        const localX = (clientX - rect.left) * (wheelCanvas.width / rect.width);
+        const localY = (clientY - rect.top) * (wheelCanvas.height / rect.height);
+        
         const cX = localX - wheelCanvas.width / 2;
         const cY = localY - wheelCanvas.height / 2;
         const radius = wheelCanvas.width / 2 - 5;
         
         const distance = Math.sqrt(cX * cX + cY * cY);
-        if (distance <= radius) {
-            const imgData = ctxWheel.getImageData(localX, localY, 1, 1).data;
-            if (imgData[3] > 0) {
-                const ryb = rgbToRyb(imgData[0], imgData[1], imgData[2]);
-                currentProportions = ryb;
-                renderizarHerramienta();
-                dibujarRuedaCromatica();
-            }
-        }
+        const clampedDist = Math.min(distance, radius);
+        
+        let angle = Math.atan2(cY, cX) * (180 / Math.PI);
+        if (angle < 0) angle += 360;
+        
+        const sat = clampedDist / radius;
+        const rgb = hslToRgb(angle, sat, 0.5);
+        
+        currentHexColor = [rgb.r, rgb.g, rgb.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
+        currentProportions = rgbToRyb(rgb.r, rgb.g, rgb.b);
+        
+        renderizarHerramienta(true);
     }
 
     wheelCanvas.addEventListener('mousedown', (e) => {
@@ -848,7 +869,10 @@
         let desajuste = 100 - sumaTotal;
         if (desajuste !== 0) { currentProportions[otrasLlaves[0]] += desajuste; }
 
-        renderizarHerramienta();
+        const rgbObj = obtenerRgbActual();
+        currentHexColor = [rgbObj.r, rgbObj.g, rgbObj.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+        renderizarHerramienta(true);
     }
 
     const RYB_CUBE = [[1,1,1], [1,1,0], [1,0,0], [1,0.5,0], [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]];
@@ -891,7 +915,7 @@
         };
     }
 
-    function renderizarHerramienta() {
+    function renderizarHerramienta(mantenerHexExacto = true) {
         Object.keys(currentProportions).forEach(key => {
             const pct = currentProportions[key];
             sliders[key].value = Math.round(pct);
@@ -913,12 +937,9 @@
             }
         });
 
-        const rgbObj = obtenerRgbActual();
-        const hexClean = [rgbObj.r, rgbObj.g, rgbObj.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
-        
-        colorDisplay.style.backgroundColor = '#' + hexClean;
+        colorDisplay.style.backgroundColor = '#' + currentHexColor;
         if (document.activeElement !== hexInput) {
-            hexInput.value = hexClean;
+            hexInput.value = currentHexColor;
         }
 
         if (modoRuedaActivo) dibujarRuedaCromatica();
@@ -935,11 +956,11 @@
         document.getElementById('lbl-pct').classList.toggle('active', !esModoPartes);
         document.getElementById('lbl-parts').classList.toggle('active', esModoPartes);
         document.getElementById('panelTitle').textContent = esModoPartes ? "Proporciones en Partes (Base 50% = 1 Parte)" : "Proporciones de la Paleta";
-        renderizarHerramienta();
+        renderizarHerramienta(true);
     });
 
     saveBtn.addEventListener('click', () => {
-        const hex = '#' + hexInput.value;
+        const hex = '#' + currentHexColor;
         const propCopia = { ...currentProportions };
         
         savedColors.unshift({ hex, proportions: propCopia, id: Date.now() });
@@ -952,7 +973,8 @@
         if (item) {
             guardarEstadoEnHistorial(false);
             currentProportions = { ...item.proportions };
-            renderizarHerramienta();
+            currentHexColor = item.hex.replace('#', '');
+            renderizarHerramienta(true);
         }
     };
 
@@ -1055,13 +1077,13 @@
             const avgG = Math.round(sumG / count);
             const avgB = Math.round(sumB / count);
 
-            const ryb = rgbToRyb(avgR, avgG, avgB);
-            currentProportions = ryb;
-            renderizarHerramienta();
+            currentHexColor = [avgR, avgG, avgB].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
+            currentProportions = rgbToRyb(avgR, avgG, avgB);
+            renderizarHerramienta(true);
         }
     });
 
-    renderizarHerramienta();
+    renderizarHerramienta(true);
     renderizarListaGuardados();
 </script>
 
