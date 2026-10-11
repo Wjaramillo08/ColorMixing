@@ -69,6 +69,7 @@
             background: #ffffff;
             border-radius: 8px;
             touch-action: none;
+            transform-origin: center center;
         }
 
         .upload-prompt-wrap {
@@ -172,6 +173,8 @@
         .action-buttons {
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         .btn-sec {
             background-color: #f5f5f7;
@@ -200,7 +203,7 @@
             justify-content: center;
             align-items: center;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             background: #f5f5f7;
             padding: 8px;
             border-radius: 8px;
@@ -241,6 +244,24 @@
         }
         input:checked + .slider-switch { background-color: #34c759; }
         input:checked + .slider-switch:before { transform: translateX(22px); }
+
+        /* Control de Bloqueo de Color */
+        .lock-color-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+        .lock-color-row input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #0066cc;
+            cursor: pointer;
+        }
 
         .section-title {
             font-size: 14px;
@@ -435,6 +456,7 @@
         </div>
         
         <div class="action-buttons">
+            <button id="newImgBtn" class="btn-sec">🖼️ Nueva imagen</button>
             <button id="undoBtn" class="btn-sec" disabled>⤺ Deshacer (0)</button>
             <button id="saveBtn" class="btn-sec">💾 Guardar mezcla</button>
         </div>
@@ -447,6 +469,12 @@
             <span class="slider-switch"></span>
         </label>
         <span class="switch-label" id="lbl-parts">Partes</span>
+    </div>
+
+    <!-- Casilla para Fijar/Mantener Color -->
+    <div class="lock-color-row">
+        <input type="checkbox" id="lockColorToggle">
+        <label for="lockColorToggle">Fijar color al mover sliders (Ajuste proporcional)</label>
     </div>
 
     <div class="section-title" id="panelTitle">Proporciones de la Paleta</div>
@@ -513,6 +541,7 @@
     const colorDisplay = document.getElementById('colorDisplay');
     const hexInput = document.getElementById('hexInput');
     const modeToggle = document.getElementById('modeToggle');
+    const lockColorToggle = document.getElementById('lockColorToggle');
     const zoomSlider = document.getElementById('zoomSlider');
     const zoomVal = document.getElementById('zoomVal');
     const sampleSizeSelect = document.getElementById('sampleSize');
@@ -523,10 +552,16 @@
     const ctxWheel = wheelCanvas.getContext('2d');
     const undoBtn = document.getElementById('undoBtn');
     const saveBtn = document.getElementById('saveBtn');
+    const newImgBtn = document.getElementById('newImgBtn');
     const savedList = document.getElementById('savedList');
     
     const sliders = { r: document.getElementById('slider-r'), y: document.getElementById('slider-y'), b: document.getElementById('slider-b'), k: document.getElementById('slider-k'), w: document.getElementById('slider-w') };
     const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
+
+    // 1. CARGAR NUEVA IMAGEN
+    newImgBtn.addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });
 
     function guardarEstadoEnHistorial(origenFoto = false) {
         const copiaEstado = { proportions: { ...currentProportions }, hex: currentHexColor };
@@ -568,7 +603,7 @@
             estadoPrevioAFoto = null;
         }
         actualizarBotonUndo();
-        renderizarHerramienta(true);
+        renderizarHerramienta();
     });
 
     function actualizarBotonUndo() {
@@ -613,9 +648,9 @@
             const b = parseInt(val.slice(4, 6), 16);
             
             currentProportions = rgbToRyb(r, g, b);
-            renderizarHerramienta(true);
+            renderizarHerramienta();
         } else {
-            renderizarHerramienta(true);
+            renderizarHerramienta();
         }
     }
 
@@ -634,12 +669,19 @@
             wheelCanvas.style.display = 'block';
             if (previewImage.src) previewImage.style.display = 'none';
             uploadPrompt.style.display = 'none';
+            zoomSlider.disabled = false;
             dibujarRuedaCromatica();
         } else {
             wheelCanvas.style.display = 'none';
-            if (previewImage.src) previewImage.style.display = 'block';
-            else uploadPrompt.style.display = 'block';
+            if (previewImage.src) {
+                previewImage.style.display = 'block';
+                zoomSlider.disabled = false;
+            } else {
+                uploadPrompt.style.display = 'block';
+                zoomSlider.disabled = true;
+            }
         }
+        limitarYAplicarTransformacion();
     });
 
     function dibujarRuedaCromatica() {
@@ -728,7 +770,6 @@
         };
     }
 
-    // --- SELECCIÓN Y ARRASTRE DE ALTA PRECISIÓN EN LA RUEDA ---
     function procesarSeleccionRueda(clientX, clientY) {
         const rect = wheelCanvas.getBoundingClientRect();
         const localX = (clientX - rect.left) * (wheelCanvas.width / rect.width);
@@ -750,7 +791,7 @@
         currentHexColor = [rgb.r, rgb.g, rgb.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
         currentProportions = rgbToRyb(rgb.r, rgb.g, rgb.b);
         
-        renderizarHerramienta(true);
+        renderizarHerramienta();
     }
 
     wheelCanvas.addEventListener('mousedown', (e) => {
@@ -777,6 +818,7 @@
     });
     window.addEventListener('touchend', () => { arrastrandoEnRueda = false; });
 
+    // Paneo y Zoom (Funciona tanto para Foto como para Rueda Cromática)
     let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0, haHechoPaneo = false;
 
     zoomSlider.addEventListener('input', (e) => {
@@ -786,7 +828,7 @@
     });
 
     dropZone.addEventListener('mousedown', (e) => {
-        if (!previewImage.src || modoRuedaActivo) return;
+        if ((!previewImage.src && !modoRuedaActivo)) return;
         isDragging = true; haHechoPaneo = false;
         startX = e.clientX - posX; startY = e.clientY - posY;
         e.preventDefault();
@@ -801,7 +843,7 @@
     window.addEventListener('mouseup', () => { isDragging = false; });
 
     dropZone.addEventListener('touchstart', (e) => {
-        if (!previewImage.src || modoRuedaActivo) return;
+        if ((!previewImage.src && !modoRuedaActivo)) return;
         if (e.touches.length === 1) {
             isDragging = true; haHechoPaneo = false;
             startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
@@ -818,7 +860,12 @@
 
     function limitarYAplicarTransformacion() {
         if (scale === 1) { posX = 0; posY = 0; }
-        previewImage.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        const transformStr = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        if (modoRuedaActivo) {
+            wheelCanvas.style.transform = transformStr;
+        } else {
+            previewImage.style.transform = transformStr;
+        }
     }
 
     function porcentajeAFraccionTexto(pct) {
@@ -840,6 +887,7 @@
         return fraccionStr !== "" ? fraccionStr : "0";
     }
 
+    // 3 y 4. BALANCEO Y MOVIMIENTO DE SLIDERS (Soporta Fijar Color & Mover en Partes)
     function balancearProporciones(llaveModificada, nuevoValor, esFinDelGesto = false) {
         if (esFinDelGesto) guardarEstadoEnHistorial(false);
 
@@ -850,29 +898,33 @@
 
         if (diferencia === 0) return;
 
-        const otrasLlaves = Object.keys(currentProportions).filter(k => k !== llaveModificada);
-        const sumaOtras = otrasLlaves.reduce((acc, k) => acc + currentProportions[k], 0);
+        const estaBloqueadoElColor = lockColorToggle.checked;
 
-        if (sumaOtras > 0) {
-            let sumaVerificacion = 0;
-            otrasLlaves.forEach(k => {
-                const fraccion = currentProportions[k] / sumaOtras;
-                currentProportions[k] -= diferencia * fraccion;
-                currentProportions[k] = Math.max(0, currentProportions[k]);
-                sumaVerificacion += currentProportions[k];
-            });
+        if (estaBloqueadoElColor) {
+            // Mantiene el color proporcional equilibrando los demás componentes
+            const otrasLlaves = Object.keys(currentProportions).filter(k => k !== llaveModificada);
+            const sumaOtras = otrasLlaves.reduce((acc, k) => acc + currentProportions[k], 0);
+
+            if (sumaOtras > 0) {
+                otrasLlaves.forEach(k => {
+                    const fraccion = currentProportions[k] / sumaOtras;
+                    currentProportions[k] -= diferencia * fraccion;
+                    currentProportions[k] = Math.max(0, currentProportions[k]);
+                });
+            } else {
+                otrasLlaves.forEach(k => { currentProportions[k] = (100 - nuevoValor) / 4; });
+            }
+
+            let sumaTotal = Object.values(currentProportions).reduce((a, b) => a + b, 0);
+            let desajuste = 100 - sumaTotal;
+            if (desajuste !== 0) { currentProportions[otrasLlaves[0]] += desajuste; }
         } else {
-            otrasLlaves.forEach(k => { currentProportions[k] = (100 - nuevoValor) / 4; });
+            // Unchecked: Genera nuevos colores libremente
+            const rgbObj = obtenerRgbActual();
+            currentHexColor = [rgbObj.r, rgbObj.g, rgbObj.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
         }
 
-        let sumaTotal = Object.values(currentProportions).reduce((a, b) => a + b, 0);
-        let desajuste = 100 - sumaTotal;
-        if (desajuste !== 0) { currentProportions[otrasLlaves[0]] += desajuste; }
-
-        const rgbObj = obtenerRgbActual();
-        currentHexColor = [rgbObj.r, rgbObj.g, rgbObj.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
-
-        renderizarHerramienta(true);
+        renderizarHerramienta();
     }
 
     const RYB_CUBE = [[1,1,1], [1,1,0], [1,0,0], [1,0.5,0], [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]];
@@ -915,17 +967,16 @@
         };
     }
 
-    function renderizarHerramienta(mantenerHexExacto = true) {
+    function renderizarHerramienta() {
         Object.keys(currentProportions).forEach(key => {
             const pct = currentProportions[key];
             sliders[key].value = Math.round(pct);
+            sliders[key].disabled = false; // Mantiene sliders habilitados siempre
             
             if (esModoPartes) {
                 boxes[key].innerHTML = `<span class="parts-text">${porcentajeAFraccionTexto(pct)}</span>`;
-                sliders[key].disabled = true;
             } else {
                 boxes[key].innerHTML = `<input type="number" id="num-${key}" class="percentage-input" min="0" max="100" value="${Math.round(pct)}"><span style="font-size:12px;margin-left:1px;color:#86868b">%</span>`;
-                sliders[key].disabled = false;
                 
                 const nuevoInput = document.getElementById(`num-${key}`);
                 nuevoInput.addEventListener('focus', () => { guardarEstadoEnHistorial(false); });
@@ -956,7 +1007,7 @@
         document.getElementById('lbl-pct').classList.toggle('active', !esModoPartes);
         document.getElementById('lbl-parts').classList.toggle('active', esModoPartes);
         document.getElementById('panelTitle').textContent = esModoPartes ? "Proporciones en Partes (Base 50% = 1 Parte)" : "Proporciones de la Paleta";
-        renderizarHerramienta(true);
+        renderizarHerramienta();
     });
 
     saveBtn.addEventListener('click', () => {
@@ -974,7 +1025,7 @@
             guardarEstadoEnHistorial(false);
             currentProportions = { ...item.proportions };
             currentHexColor = item.hex.replace('#', '');
-            renderizarHerramienta(true);
+            renderizarHerramienta();
         }
     };
 
@@ -1079,11 +1130,11 @@
 
             currentHexColor = [avgR, avgG, avgB].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
             currentProportions = rgbToRyb(avgR, avgG, avgB);
-            renderizarHerramienta(true);
+            renderizarHerramienta();
         }
     });
 
-    renderizarHerramienta(true);
+    renderizarHerramienta();
     renderizarListaGuardados();
 </script>
 
