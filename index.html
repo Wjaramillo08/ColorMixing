@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Simulador de Mezclas - Taller de Pintura</title>
     <style>
+        /* ==========================================================================
+           1. ESTILOS GENERALES Y ESTRUCTURA BASE
+           ========================================================================== */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f5f5f7;
@@ -31,6 +34,9 @@
             margin-bottom: 15px;
         }
         
+        /* ==========================================================================
+           2. ZONA DE IMAGEN Y RUEDA CROMÁTICA (PREVISUALIZACIÓN)
+           ========================================================================== */
         .image-container-wrapper {
             margin-bottom: 10px;
             width: 100%;
@@ -61,6 +67,7 @@
             z-index: 1;
         }
         
+        /* Lienzo interactivo para la Rueda Cromática */
         #wheelCanvas {
             display: none;
             position: absolute;
@@ -89,6 +96,9 @@
         }
         #fileInput { display: none; }
 
+        /* ==========================================================================
+           3. BARRA DE HERRAMIENTAS (ZOOM Y MUESTREO)
+           ========================================================================== */
         .toolbar-row {
             display: flex;
             align-items: center;
@@ -122,6 +132,9 @@
             background: #fff;
         }
 
+        /* ==========================================================================
+           4. SECTOR DE MUESTRA DE COLOR, HEXAGONAL Y BOTONES
+           ========================================================================== */
         .selector-zone {
             display: flex;
             flex-direction: column;
@@ -198,6 +211,7 @@
             opacity: 0.6;
         }
 
+        /* Selector de Modo (% vs Partes) */
         .mode-switch-container {
             display: flex;
             justify-content: center;
@@ -245,7 +259,7 @@
         input:checked + .slider-switch { background-color: #34c759; }
         input:checked + .slider-switch:before { transform: translateX(22px); }
 
-        /* Control de Bloqueo de Color */
+        /* Casilla para Bloquear/Fijar Color */
         .lock-color-row {
             display: flex;
             align-items: center;
@@ -263,6 +277,9 @@
             cursor: pointer;
         }
 
+        /* ==========================================================================
+           5. DESLIZADORES DE COLORES / PIGMENTOS
+           ========================================================================== */
         .section-title {
             font-size: 14px;
             font-weight: 600;
@@ -353,6 +370,9 @@
             white-space: nowrap;
         }
 
+        /* ==========================================================================
+           6. TARJETAS DE MEZCLAS GUARDADAS
+           ========================================================================== */
         .saved-colors-list {
             display: flex;
             flex-direction: column;
@@ -418,6 +438,7 @@
 <div class="container">
     <h1>Laboratorio de Mezclas</h1>
     
+    <!-- ÁREA SUPERIOR DE PREVISUALIZACIÓN Y RUEDA DE COLOR -->
     <div class="image-container-wrapper">
         <div class="image-zone" id="dropZone">
             <div class="upload-prompt-wrap" id="uploadPrompt">
@@ -430,6 +451,7 @@
         </div>
     </div>
 
+    <!-- CONTROLES DE ZOOM Y TAMAÑO DE MUESTREO POR ÁREA -->
     <div class="toolbar-row">
         <div class="zoom-controls">
             <span>Zoom:</span>
@@ -447,6 +469,7 @@
         </div>
     </div>
 
+    <!-- PANEL PRINCIPAL DE COLOR SELECCIONADO Y ACCIONES -->
     <div class="selector-zone">
         <div id="colorDisplay" title="Toca para desplegar la rueda de color"></div>
         
@@ -462,6 +485,7 @@
         </div>
     </div>
 
+    <!-- CONMUTADOR DE UNIDADES (% VS PARTES) -->
     <div class="mode-switch-container">
         <span class="switch-label active" id="lbl-pct">%</span>
         <label class="switch">
@@ -471,7 +495,7 @@
         <span class="switch-label" id="lbl-parts">Partes</span>
     </div>
 
-    <!-- Casilla para Fijar/Mantener Color -->
+    <!-- CASILLA PARA MANTENER/FIJAR EL COLOR SELECCIONADO -->
     <div class="lock-color-row">
         <input type="checkbox" id="lockColorToggle">
         <label for="lockColorToggle">Fijar color al mover sliders (Ajuste proporcional)</label>
@@ -479,6 +503,7 @@
 
     <div class="section-title" id="panelTitle">Proporciones de la Paleta</div>
     
+    <!-- DESLIZADORES DE LOS 5 PIGMENTOS FÍSICOS (R, Y, B, K, W) -->
     <div id="paint-sliders">
         <div class="slider-container">
             <div class="label" style="background-color: #ff3b30; color: #ffffff;">Rojo</div>
@@ -517,6 +542,7 @@
         </div>
     </div>
 
+    <!-- LISTA DE MEZCLAS ALMACENADAS EN MEMORIA (LOCALSTORAGE) -->
     <div style="margin-top: 25px;">
         <div class="section-title">Paleta Guardada</div>
         <div id="savedList" class="saved-colors-list">
@@ -528,16 +554,20 @@
 <canvas id="canvasAux" style="display:none;"></canvas>
 
 <script>
-    let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 };
-    let currentHexColor = "E67E22";
-    let undoStack = []; 
-    let savedColors = JSON.parse(localStorage.getItem('savedPalettes') || '[]');
-    let esModoPartes = false;
+    /* ==========================================================================
+       VARIABLES GLOBALES DE ESTADO
+       ========================================================================== */
+    let currentProportions = { r: 43, y: 40, b: 0, k: 3, w: 14 }; // Estado de pigmentos
+    let currentHexColor = "E67E22"; // Código HEX activo
+    let undoStack = []; // Pila de desfaire (Historial de estados)
+    let savedColors = JSON.parse(localStorage.getItem('savedPalettes') || '[]'); // Paletas guardadas en iPhone
+    let esModoPartes = false; // Alternador entre % y Fracciones/Partes
     let ultimoCambioFueFoto = false;
     let estadoPrevioAFoto = null; 
     let modoRuedaActivo = false;
     let arrastrandoEnRueda = false;
 
+    // Referencias al DOM
     const colorDisplay = document.getElementById('colorDisplay');
     const hexInput = document.getElementById('hexInput');
     const modeToggle = document.getElementById('modeToggle');
@@ -558,11 +588,16 @@
     const sliders = { r: document.getElementById('slider-r'), y: document.getElementById('slider-y'), b: document.getElementById('slider-b'), k: document.getElementById('slider-k'), w: document.getElementById('slider-w') };
     const boxes = { r: document.getElementById('box-r'), y: document.getElementById('box-y'), b: document.getElementById('box-b'), k: document.getElementById('box-k'), w: document.getElementById('box-w') };
 
-    // 1. CARGAR NUEVA IMAGEN
+    /* ==========================================================================
+       1. CARGAR NUEVA IMAGEN
+       ========================================================================== */
     newImgBtn.addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
 
+    /* ==========================================================================
+       2. GESTIÓN DEL HISTORIAL (DESHACER / UNDO)
+       ========================================================================== */
     function guardarEstadoEnHistorial(origenFoto = false) {
         const copiaEstado = { proportions: { ...currentProportions }, hex: currentHexColor };
         if (origenFoto) {
@@ -611,6 +646,10 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
+    /* ==========================================================================
+       3. CONVERSIÓN PIGMENTARIA Y ESPACIOS DE COLOR (RGB <-> RYB / HSL)
+       ========================================================================== */
+    // Convierte colores RGB de pantalla a pigmentos de pintura RYB (Rojo, Amarillo, Azul, Negro, Blanco)
     function rgbToRyb(r, g, b) {
         let rN = r / 255, gN = g / 255, bN = b / 255;
         let w = Math.min(rN, gN, bN);
@@ -637,6 +676,9 @@
         };
     }
 
+    /* ==========================================================================
+       4. EDICIÓN MANUAL DEL CÓDIGO HEXADECIMAL
+       ========================================================================== */
     function aplicarHexManual() {
         let val = hexInput.value.trim().replace('#', '');
         if (/^[0-9A-Fa-f]{6}$/.test(val)) {
@@ -662,6 +704,9 @@
         }
     });
 
+    /* ==========================================================================
+       5. RUEDA CROMÁTICA INTERACTIVA CON DIBUJO Y PUNTERO
+       ========================================================================== */
     colorDisplay.addEventListener('click', (e) => {
         e.stopPropagation();
         modoRuedaActivo = !modoRuedaActivo;
@@ -684,6 +729,7 @@
         limitarYAplicarTransformacion();
     });
 
+    // Redibuja el gradiente circular y marca la posición del puntero
     function dibujarRuedaCromatica() {
         const width = wheelCanvas.width;
         const height = wheelCanvas.height;
@@ -724,6 +770,11 @@
         ctx.stroke();
         ctx.fillStyle = '#000000';
         ctx.fill();
+
+        // Al cambiar de zoom en la rueda, recalcula el centrado automático hacia la posición del puntero
+        if (modoRuedaActivo && scale > 1) {
+            centrarRuedaEnPuntero(pinX, pinY);
+        }
     }
 
     function rgbToHsl(r, g, b) {
@@ -770,6 +821,9 @@
         };
     }
 
+    /* ==========================================================================
+       6. SELECCIÓN Y ARRASTRE DE ALTA PRECISIÓN EN LA RUEDA CROMÁTICA
+       ========================================================================== */
     function procesarSeleccionRueda(clientX, clientY) {
         const rect = wheelCanvas.getBoundingClientRect();
         const localX = (clientX - rect.left) * (wheelCanvas.width / rect.width);
@@ -818,13 +872,32 @@
     });
     window.addEventListener('touchend', () => { arrastrandoEnRueda = false; });
 
-    // Paneo y Zoom (Funciona tanto para Foto como para Rueda Cromática)
+    /* ==========================================================================
+       7. PANEO Y ZOOM CON CENTRADO AUTOMÁTICO EN EL PUNTERO
+       ========================================================================== */
     let scale = 1, posX = 0, posY = 0, isDragging = false, startX = 0, startY = 0, haHechoPaneo = false;
+
+    // Centra el lienzo de la rueda en las coordenadas relativas del puntero al hacer Zoom
+    function centrarRuedaEnPuntero(pinX, pinY) {
+        const centroX = wheelCanvas.width / 2;
+        const centroY = wheelCanvas.height / 2;
+        const offsetX = (centroX - pinX) * scale;
+        const offsetY = (centroY - pinY) * scale;
+        
+        posX = offsetX;
+        posY = offsetY;
+        limitarYAplicarTransformacion();
+    }
 
     zoomSlider.addEventListener('input', (e) => {
         scale = parseFloat(e.target.value);
         zoomVal.textContent = scale.toFixed(1) + "x";
-        limitarYAplicarTransformacion();
+        
+        if (modoRuedaActivo) {
+            dibujarRuedaCromatica(); // Dispara centrado automático en el puntero
+        } else {
+            limitarYAplicarTransformacion();
+        }
     });
 
     dropZone.addEventListener('mousedown', (e) => {
@@ -868,6 +941,7 @@
         }
     }
 
+    // Convierte valores de porcentaje a texto legible de fracciones en partes (Base 50% = 1 Parte)
     function porcentajeAFraccionTexto(pct) {
         if (pct < 1.5) return "0";
         const totalPartes = pct / 50; 
@@ -887,7 +961,9 @@
         return fraccionStr !== "" ? fraccionStr : "0";
     }
 
-    // 3 y 4. BALANCEO Y MOVIMIENTO DE SLIDERS (Soporta Fijar Color & Mover en Partes)
+    /* ==========================================================================
+       8. BALANCEO Y DINÁMICA DE SLIDERS DE PIGMENTOS
+       ========================================================================== */
     function balancearProporciones(llaveModificada, nuevoValor, esFinDelGesto = false) {
         if (esFinDelGesto) guardarEstadoEnHistorial(false);
 
@@ -901,7 +977,7 @@
         const estaBloqueadoElColor = lockColorToggle.checked;
 
         if (estaBloqueadoElColor) {
-            // Mantiene el color proporcional equilibrando los demás componentes
+            // Mantiene el color constante reajustando los otros componentes proporcionalmente
             const otrasLlaves = Object.keys(currentProportions).filter(k => k !== llaveModificada);
             const sumaOtras = otrasLlaves.reduce((acc, k) => acc + currentProportions[k], 0);
 
@@ -919,7 +995,7 @@
             let desajuste = 100 - sumaTotal;
             if (desajuste !== 0) { currentProportions[otrasLlaves[0]] += desajuste; }
         } else {
-            // Unchecked: Genera nuevos colores libremente
+            // Unchecked: recalcula libremente el nuevo color resultante
             const rgbObj = obtenerRgbActual();
             currentHexColor = [rgbObj.r, rgbObj.g, rgbObj.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase();
         }
@@ -927,6 +1003,7 @@
         renderizarHerramienta();
     }
 
+    // Cubo de interpolación RYB
     const RYB_CUBE = [[1,1,1], [1,1,0], [1,0,0], [1,0.5,0], [0.16,0.38,0.68], [0,0.5,0], [0.5,0,0.5], [0.2,0.2,0.2]];
     
     function interpolarRyb(rN, yN, bN) {
@@ -967,11 +1044,14 @@
         };
     }
 
+    /* ==========================================================================
+       9. RENDERIZADO Y ACTUALIZACIÓN DE INTERFAZ
+       ========================================================================== */
     function renderizarHerramienta() {
         Object.keys(currentProportions).forEach(key => {
             const pct = currentProportions[key];
             sliders[key].value = Math.round(pct);
-            sliders[key].disabled = false; // Mantiene sliders habilitados siempre
+            sliders[key].disabled = false;
             
             if (esModoPartes) {
                 boxes[key].innerHTML = `<span class="parts-text">${porcentajeAFraccionTexto(pct)}</span>`;
@@ -1010,6 +1090,9 @@
         renderizarHerramienta();
     });
 
+    /* ==========================================================================
+       10. GUARDAR Y CARGAR PALETAS EN ALMACENAMIENTO LOCAL (LOCALSTORAGE)
+       ========================================================================== */
     saveBtn.addEventListener('click', () => {
         const hex = '#' + currentHexColor;
         const propCopia = { ...currentProportions };
@@ -1062,6 +1145,9 @@
         }).join('');
     }
 
+    /* ==========================================================================
+       11. PROCESAMIENTO DE IMÁGENES SUBIDAS Y MUESTREO
+       ========================================================================== */
     const fileInput = document.getElementById('fileInput');
     const canvasAux = document.getElementById('canvasAux');
     const ctxAux = canvasAux.getContext('2d');
@@ -1084,6 +1170,7 @@
         }
     });
 
+    // Muestreo por promedio de área (N x N) al hacer clic en la imagen
     previewImage.addEventListener('click', function(e) {
         if (haHechoPaneo || modoRuedaActivo) return; 
         e.stopPropagation();
@@ -1134,6 +1221,7 @@
         }
     });
 
+    // Inicialización al cargar la aplicación
     renderizarHerramienta();
     renderizarListaGuardados();
 </script>
