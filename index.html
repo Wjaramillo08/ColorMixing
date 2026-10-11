@@ -569,22 +569,26 @@
         undoBtn.textContent = `⤺ Deshacer (${undoStack.length})`;
     }
 
+    // --- CONVERSIÓN PIGMENTARIA RYB CORREGIDA ---
     function rgbToRyb(r, g, b) {
-        let rNorm = r / 255, gNorm = g / 255, bNorm = b / 255;
-        let w = Math.min(rNorm, gNorm, bNorm);
-        let k = 1 - Math.max(rNorm, gNorm, bNorm);
+        let rN = r / 255;
+        let gN = g / 255;
+        let bN = b / 255;
 
-        let rPure = rNorm - w;
-        let gPure = gNorm - w;
-        let bPure = bNorm - w;
+        let w = Math.min(rN, gN, bN);
+        let k = 1 - Math.max(rN, gN, bN);
 
-        let yPure = Math.min(rPure, gPure);
-        rPure -= yPure;
-        gPure -= yPure;
+        let rP = rN - w;
+        let gP = gN - w;
+        let bP = bN - w;
 
-        let bMix = bPure + gPure;
-        let rMix = rPure;
-        let yMix = yPure;
+        let yP = Math.min(rP, gP);
+        rP -= yP;
+        gP -= yP;
+
+        let bMix = bP + gP;
+        let rMix = rP;
+        let yMix = yP;
 
         let total = rMix + yMix + bMix + k + w;
         if (total === 0) return { r: 0, y: 0, b: 0, k: 0, w: 100 };
@@ -608,7 +612,21 @@
             
             const ryb = rgbToRyb(r, g, b);
             currentProportions = ryb;
-            renderizarHerramienta();
+            
+            colorDisplay.style.backgroundColor = '#' + val.toUpperCase();
+            
+            Object.keys(currentProportions).forEach(key => {
+                const pct = currentProportions[key];
+                sliders[key].value = Math.round(pct);
+                if (esModoPartes) {
+                    boxes[key].innerHTML = `<span class="parts-text">${porcentajeAFraccionTexto(pct)}</span>`;
+                } else {
+                    const numInput = document.getElementById(`num-${key}`);
+                    if (numInput) numInput.value = Math.round(pct);
+                }
+            });
+
+            if (modoRuedaActivo) dibujarRuedaCromatica();
         } else {
             renderizarHerramienta();
         }
@@ -616,7 +634,10 @@
 
     hexInput.addEventListener('change', aplicarHexManual);
     hexInput.addEventListener('keyup', (e) => {
-        if (e.key === 'Enter') aplicarHexManual();
+        if (e.key === 'Enter') {
+            aplicarHexManual();
+            hexInput.blur();
+        }
     });
 
     colorDisplay.addEventListener('click', (e) => {
